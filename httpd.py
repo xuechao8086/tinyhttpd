@@ -9,6 +9,7 @@ Description:
     python version tiny httpd for study purpose               
 ToDo:
     fix bug in HttpDeamon.startup    
+    add epoll support
 """
 
 import argparse
@@ -16,6 +17,7 @@ import os
 import stat
 import socket
 import fcntl
+import re
 import struct
 import time
 
@@ -49,7 +51,7 @@ def config_log():
 def parse_argument():
     parser = argparse.ArgumentParser(
             description = 'tiny httpd server, written in python',
-            epilog = 'example: %(prog)s')
+            epilog = 'example: %(prog)s -i 127.0.0.1 -p 8080 ')
 
     parser.add_argument('-i', '--ip', 
                         metavar='ip',
@@ -67,7 +69,7 @@ def parse_argument():
 
 
 class HttpDeamon(object):
-    def __init__(self, ip, port, threadnum=1000):
+    def __init__(self, ip, port, threadnum=100):
         self.ip = ip
         self.port = port
         self.threadnum = threadnum
@@ -103,6 +105,7 @@ class HttpDeamon(object):
 
 def startup(ip, port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind((ip, port))
     s.listen(5)
     logger.info('httpd running on {0}:{1}'.format(ip, port))
@@ -117,6 +120,7 @@ def task(args, kwargs):
 class JobCls(object):
     def __init__(self, client_socket):
         self.client_socket = client_socket
+        self.param_pattern = re.compile('\w+\s*=\w+\s*') 
 
     def __del__(self):
         self.client_socket.close()
@@ -128,14 +132,15 @@ class JobCls(object):
             break
         client_content = client_content.strip()
         
-        print client_content
+        logger.debug(client_content)
         arr = client_content.split('\n')
+        #logger.debug(arr[0])
         method, url, version = arr[0].split()
         method = method.upper()
         #self.client_socket.sendall('begin process')
         if method not in (GET, POST, HEAD):
-            return self.server_error(self.client_socket)
-        
+            return self.server_error()
+         
         cgi = False
         query_string = '' 
         pos = 0
@@ -146,27 +151,49 @@ class JobCls(object):
             pos = url.find('?')
             if pos != -1:
                 cgi = True
-                query_string = url[pos:]
+                query_string = url[pos+1:]
                 r_path  = url[0:pos]
     
     
         r_path = '{0}/{1}'.format(FILEPATH, r_path)
+        logger.debug('r_path={0} cgi={1} query_string={2}'.format(r_path, cgi, query_string))
         if cgi:
-            self.execute_cgi(r_path)
+            self.execute_cgi(r_path, query_string)
         else:
             self.serve_file(r_path)
         
         return str(id)
     
     
-    def execute_cgi(self, r_path):
-        self.client_socket.send(r_path)
-    
+    def execute_cgi(self, filename, query_string):
+        if not os.path.isfile(filename):
+            return self.not_found()
+        if not os.access(filename, os.X_OK):
+            return self.forbidden()
+        
+        env = os.environ
+        arr = query_string.split('&')
+        for item in arr:
+            if item.strip() != '' and not self.param_pattern.match(item):
+                return self.bad_request()
+            k, v = item.split('=')
+            #yet, not use os.putenv
+            env[k] = v
+        
+        self.headers()    
+        pid = os.fork()
+        if pid == 0:
+            #for example purpose
+            os.execve('/bin/ls', ['/home/charlie/'], env)
+        else:
+            os.waitpid(pid, 0)
+
     def serve_file(self, filename):
         if not os.path.isfile(filename): 
-            return self.server_error(self.client_socket)
+            return self.not_found()
         if not os.access(filename, os.R_OK):
-            return self.server_error(self.client_socket)
+            return self.forbidden()
+        
         self.headers()
         with open(filename, 'r') as f:
             self.client_socket.send(
@@ -189,7 +216,48 @@ class JobCls(object):
                    ]
         for i in headers:
             self.client_socket.send(i)
-    
+
+    def bad_request(self):
+        contents = [
+                    "HTTP/1.0 400 BAD REQUEST\r\n",
+                    "Content-Type: text/html\r\n",
+                    "\r\n",
+                    "<html>",
+                    "<title>bad request</title>",
+                    "<body><p>bad request</p></body>",
+                    "</html>"
+                    ]
+        for i in contents:
+            self.client_socket.send(i)
+
+    def unauthorized(self):
+        contents = [
+                    "HTTP/1.0 401 UNAUTHORIZED\r\n",
+                    "Content-Type: text/html\r\n",
+                    "\r\n",
+                    "<html>",
+                    "<title>401 unauthorized</title>"
+                    "<body><p>bad request</p></body>",
+                    "</html>"
+                    ]
+        for i in contents:
+            self.client_socket.send(i)
+
+
+    def forbidden(self):
+        contents = [
+                    "HTTP/1.0 403 FORBIDDEN\r\n",
+                    "Content-Type: text/html\r\n",
+                    "\r\n",
+                    "<html>",
+                    "<title>403 forbidden</title>",
+                    "<body><p>forbidden!</p></body>",
+                    "</html>"
+                    ]
+        for i in contents:
+            self.client_socket.send(i)
+
+   
     def not_found(self):
         contents = [
                     "HTTP/1.0 404 NOT FOUND\r\n",
@@ -203,7 +271,6 @@ class JobCls(object):
         for i in contents:
             self.client_socket.send(i)
     
-    
     def server_error(self):
         contents = [
                     "HTTP/1.0 500 Internal Server Error\r\n",
@@ -216,7 +283,22 @@ class JobCls(object):
                     ]
         for i in contents:
             self.client_socket.send(i)
-   
+    
+    def not_implemented(self):
+        contents = [
+                    "HTTP/1.0 501 NOT IMPLEMENTED\r\n",
+                    "Content-Type: text/html\r\n",
+                    "\r\n",
+                    "<html>",
+                    "<title>501 not implemented",
+                    "<body><p>501 not implemented</p></body>",
+                    "</html>"
+                    ]
+        for i in contents:
+            self.client_socket.send(i)
+
+
+
 
 if __name__ == '__main__':
     logger = config_log()

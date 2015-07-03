@@ -30,7 +30,8 @@ class MyThread(threading.Thread):
                 # 报任务返回的结果放在结果队列中
                 self.resultQueue.put(res + " | " + self.getName())
             except Queue.Empty:  # 任务队列空的时候结束此线程
-                break
+                time.sleep(1) 
+                #break
             except:
                 print sys.exc_info()
                 raise
