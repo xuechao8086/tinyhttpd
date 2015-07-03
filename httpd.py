@@ -9,7 +9,7 @@ Description:
     python version tiny httpd for study purpose               
 ToDo:
     fix bug in HttpDeamon.startup    
-    add epoll support
+    add epoll support in multi thread.
 """
 
 import argparse
@@ -20,12 +20,13 @@ import fcntl
 import re
 import struct
 import time
-
+import select
 import Queue
 import threading
 import sys
 import time
 import logging
+import errno
 
 from threadpool import ThreadPool
 
@@ -38,12 +39,16 @@ def config_log():
     logger = logging.getLogger('out')
     logger.setLevel(logging.DEBUG)
 
+    fh = logging.FileHandler("./httpd.log")
+    fh.setLevel(logging.INFO)
+
     ch = logging.StreamHandler()
     ch.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
-    
+    fh.setFormatter(formatter) 
+
     logger.addHandler(ch)
 
     return logger
@@ -81,11 +86,70 @@ class HttpDeamon(object):
         #self.server_socket = self.startup()
     
     def run(self):
+        """block version, odd enough, this is a multi thread version"""
         while True:
             client_socket, (ip, port) = self.server_socket.accept()
             logger.debug('receive request from {0}:{1}'.format(ip, port))
             self.tp.add_job(task, self.id, client_socket)
             self.id += 1
+    
+    def epoll_run(self):
+        """async version"""
+        try:
+            epoll_fd = select.epoll()
+            epoll_fd.register(self.server_socket.fileno(), select.EPOLLIN)
+        except select.error, msg:
+            exit_error(msg)
+
+        connections = {}
+        addresses = {}
+        datalist = {}
+        while True:
+            epoll_list = epoll_fd.poll()
+            for fd, events in epoll_list:
+                if fd == self.server_socket.fileno():
+                    conn, addr = self.server_socket.accept()
+                    logger.debug("accept connection from {0}:{1} fd={2}".format(addr[0], addr[1], conn.fileno()))
+                    conn.setblocking(0)
+                    epoll_fd.register(conn.fileno(), select.EPOLLIN|select.EPOLLET) 
+                    connections[conn.fileno()] = conn
+                    addresses[conn.fileno()] = addr
+                elif select.EPOLLIN & events:
+                    datas = ''
+                    while True:
+                        try:
+                            data = connections[fd].recv(10)
+                            if not data and not datas:
+                                epoll_fd.unregister(fd)
+                                connections[fd].close()
+                                logger.debug("{0}:{1} closed".format(addresses[fd][0], addresses[fd][1]))
+                                break
+                            else:
+                                datas += data
+                        except socket.error, msg:
+                            if msg.errno == errno.EAGAIN:
+                                logger.debug("{0} receive {1}".format(fd, datas))
+                                datalist[fd] = datas
+                                epoll_fd.modify(fd, select.EPOLLET|select.EPOLLOUT)
+                                break
+                            else:
+                                epoll_fd.unregister(fd)
+                                connections[fd].close()
+                                logger.error(msg)
+                                break
+                elif select.EPOLLHUP & events:
+                    epoll_fd.unregister(fd)
+                    connections[fd].close()
+                    logger.debug("{0}:{1} closed".format(addresses[fd][0], addresses[fd][1]))
+                elif select.EPOLLOUT & events:
+                    send_len = 0
+                    while True:
+                        send_len += connections[fd].send(datalist[fd][send_len:])
+                        if send_len == len(datalist[fd]):
+                            break
+                    epoll_fd.modify(fd, select.EPOLLIN|select.EPOLLET)
+                else:
+                    continue
 
     def __del__(self):
         self.server_socket.close()
@@ -102,12 +166,27 @@ class HttpDeamon(object):
         logger.info('httpd running on {0}:{1}'.format(self.ip, self.port))
         return s
 
+def exit_error(msg):
+    logger.error(msg)
+    sys.exit(-1)
 
 def startup(ip, port):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind((ip, port))
-    s.listen(5)
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    except socket.error, msg:
+       exit_error("create socket fail")
+    try:    
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    except socket.error, msg:
+        exit_error("setsockopt error")
+    try:
+        s.bind((ip, port))
+    except socket.error, msg:
+        exit_error("listen file id bind ip fail")
+    try:
+        s.listen(5)
+    except socket.error, msg:
+        exit_error(msg)
     logger.info('httpd running on {0}:{1}'.format(ip, port))
     return s
 
@@ -127,7 +206,9 @@ class JobCls(object):
 
     def accept_request(self):
         client_content = ''
-        while True:
+        EOL1 = b'\n\n'
+        EOL2 = b'\n\r\n'
+        while EOL1 not in client_content and EOL2 not in client_content:
             client_content = self.client_socket.recv(1024)
             break
         client_content = client_content.strip()
@@ -163,7 +244,6 @@ class JobCls(object):
             self.serve_file(r_path)
         
         return str(id)
-    
     
     def execute_cgi(self, filename, query_string):
         if not os.path.isfile(filename):
@@ -243,7 +323,6 @@ class JobCls(object):
         for i in contents:
             self.client_socket.send(i)
 
-
     def forbidden(self):
         contents = [
                     "HTTP/1.0 403 FORBIDDEN\r\n",
@@ -298,10 +377,9 @@ class JobCls(object):
             self.client_socket.send(i)
 
 
-
-
 if __name__ == '__main__':
     logger = config_log()
     args = parse_argument()
     ip, port = args.ip, args.port
-    HttpDeamon(ip, port).run()
+    #HttpDeamon(ip, port).run()
+    HttpDeamon(ip, port).epoll_run()
