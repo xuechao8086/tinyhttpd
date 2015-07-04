@@ -28,7 +28,8 @@ class MyThread(threading.Thread):
                 # 我们要执行的任务
                 res = callable(args, kwargs)
                 # 报任务返回的结果放在结果队列中
-                self.resultQueue.put(res + " | " + self.getName())
+                #self.resultQueue.put(res + " | " + self.getName())
+                self.resultQueue.put((self.getName(), res))
             except Queue.Empty:  # 任务队列空的时候结束此线程
                 time.sleep(1) 
                 #break
@@ -37,7 +38,7 @@ class MyThread(threading.Thread):
                 raise
 
 
-class ThreadPool:
+class ThreadPool(object):
     def __init__(self, num_of_threads=10):
         self.workQueue = Queue.Queue()
         self.resultQueue = Queue.Queue()

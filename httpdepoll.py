@@ -101,7 +101,8 @@ class HttpDeamon(object):
         """async version"""
         try:
             epoll_fd = select.epoll()
-            epoll_fd.register(self.server_socket.fileno(), select.EPOLLIN)
+            #epoll_fd.register(self.server_socket.fileno(), select.EPOLLIN)
+            epoll_fd.register(self.server_socket.fileno(), select.EPOLLIN|select.EPOLLERR|select.EPOLLHUP)
         except select.error, msg:
             exit_error(msg)
 
@@ -190,7 +191,7 @@ def startup(ip, port):
         exit_error("listen file id bind ip fail")
     try:
         s.listen(5)
-        #s.setblocking(0)
+        s.setblocking(0)
     except socket.error, msg:
         exit_error(msg)
     logger.info('httpd running on {0}:{1}'.format(ip, port))
