@@ -8,8 +8,8 @@ Create Time:    2015-07-01 23:37
 Description:
     python version tiny httpd for study purpose               
 ToDo:
-    fix bug in HttpDeamon.startup    
-    add epoll support in multi thread.
+    fix bug in HttpDeamon.startup.    
+    add epoll close unactive sockets.
 """
 
 import argparse
@@ -78,37 +78,34 @@ class HttpDeamon(object):
         self.ip = ip
         self.port = port
         self.threadnum = threadnum
-        self.tp = ThreadPool(self.threadnum)
+        self.tp = LocalThreadPool(self.threadnum)
         self.id = 0 
         self.server_socket = startup(self.ip, self.port)
         
         #bug fix, cannot use local startup, why?
         #self.server_socket = self.startup()
-        
-        #for epoll, async, later consider how to imple
-        self.inQueue = Queue.Queue()
-        self.outQueue  = Queue.Queue()
-        
-    def run(self):
-        """block version, odd enough, this is a multi thread version"""
-        while True:
-            client_socket, (ip, port) = self.server_socket.accept()
-            logger.debug('receive request from {0}:{1}'.format(ip, port))
-            self.tp.add_job(task, self.id, client_socket)
-            self.id += 1
     
     def epoll_run(self):
-        """async version"""
+        """async version, single epoll, then multi thread worker"""
         try:
             epoll_fd = select.epoll()
             #epoll_fd.register(self.server_socket.fileno(), select.EPOLLIN)
             epoll_fd.register(self.server_socket.fileno(), select.EPOLLIN|select.EPOLLERR|select.EPOLLHUP)
         except select.error, msg:
             exit_error(msg)
-
+        
         connections = {}
         addresses = {}
-        datalist = {}
+        params = {}
+
+        def close_fd(fd):
+            logger.debug("{0}:{1} closed".format(addresses[fd][0], addresses[fd][1]))
+            epoll_fd.unregister(fd)
+            connections[fd].close()
+            del addresses[fd]
+            del params[fd]
+        
+        last_time = -1
         while True:
             epoll_list = epoll_fd.poll()
             for fd, events in epoll_list:
@@ -119,42 +116,56 @@ class HttpDeamon(object):
                     epoll_fd.register(conn.fileno(), select.EPOLLIN|select.EPOLLET) 
                     connections[conn.fileno()] = conn
                     addresses[conn.fileno()] = addr
+                    params[conn.fileno()] = {'in':None, 'out':None, 'time':time.time()}
                 elif select.EPOLLIN & events:
                     datas = ''
                     while True:
                         try:
                             data = connections[fd].recv(10)
                             if not data and not datas:
-                                epoll_fd.unregister(fd)
-                                connections[fd].close()
-                                logger.debug("{0}:{1} closed".format(addresses[fd][0], addresses[fd][1]))
+                                close_fd(fd) 
                                 break
                             else:
                                 datas += data
                         except socket.error, msg:
                             if msg.errno == errno.EAGAIN:
                                 logger.debug("{0} receive {1}".format(fd, datas))
-                                datalist[fd] = datas
+                                params[fd]['in'] = datas 
+                                params[fd]['time'] = time.time()
                                 epoll_fd.modify(fd, select.EPOLLET|select.EPOLLOUT)
+                                self.tp.add_job(params[fd])
+                                self.id += 1
                                 break
                             else:
-                                epoll_fd.unregister(fd)
-                                connections[fd].close()
+                                close_fd(fd)
                                 logger.error(msg)
                                 break
                 elif select.EPOLLHUP & events:
-                    epoll_fd.unregister(fd)
-                    connections[fd].close()
-                    logger.debug("{0}:{1} closed".format(addresses[fd][0], addresses[fd][1]))
+                    close_fd(fd) 
                 elif select.EPOLLOUT & events:
-                    send_len = 0
+                    data = params[fd].get('out', None)
+                    if data == None:
+                        continue
+                    data_len = len(data)
+                    trans_len = 0
                     while True:
-                        send_len += connections[fd].send(datalist[fd][send_len:])
-                        if send_len == len(datalist[fd]):
+                        trans_len += connections[fd].send(data)
+                        params[fd]['time'] = time.time()
+                        if trans_len == data_len:
                             break
-                    epoll_fd.modify(fd, select.EPOLLIN|select.EPOLLET)
+                        #for http protocol, close it direct
+                    close_fd(fd) 
+                    #epoll_fd.modify(fd, select.EPOLLIN|select.EPOLLET)
                 else:
                     continue
+
+            #close unactive sockets, 10 mins!
+            cur_time = time.time()
+            if cur_time - last_time > 600:
+                for fd, param in params.iteritems():
+                    if cur_time - param['time'] > 600:
+                        close_fd(fd)
+
         epoll_fd.close()
 
     def __del__(self):
@@ -198,195 +209,92 @@ def startup(ip, port):
     return s
 
 
-def task(args, kwargs):
-    id, client_socket = args 
-    return JobCls(client_socket).accept_request()
+class LocalThreadPool(object):
+    def __init__(self, num_of_threads=10):
+        self.workQueue = Queue.Queue()
+        self.resultQueue = Queue.Queue()
+        self.threads = []
+        self.__createThreadPool(num_of_threads)
+
+    def __createThreadPool(self, num_of_threads):
+        for i in range(num_of_threads):
+            thread = LocalThread(self.workQueue, self.resultQueue)
+            self.threads.append(thread)
+
+    def wait_for_complete(self):
+        # 等待所有线程完成。
+        while len(self.threads):
+            thread = self.threads.pop()
+            # 等待线程结束
+            if thread.isAlive():  # 判断线程是否还存活来决定是否调用join
+                thread.join()
+
+    def add_jobv(self, callable, *args, **kwargs):
+        self.workQueue.put((callable, args, kwargs))
+    
+    def add_job(self, datas):
+        self.workQueue.put(datas)
 
 
-class JobCls(object):
-    def __init__(self, client_socket):
-        self.client_socket = client_socket
-        self.param_pattern = re.compile('\w+\s*=\w+\s*') 
+class LocalThread(threading.Thread):
+    def __init__(self, workQueue, resultQueue, timeout=30, **kwargs):
+        threading.Thread.__init__(self, kwargs=kwargs)
+        # 线程在结束前等待任务队列多长时间
+        self.timeout = timeout
+        self.setDaemon(True)
+        self.workQueue = workQueue
+        self.resultQueue = resultQueue
+        self.worker = EpollWorker()
+        self.start()
 
-    def __del__(self):
-        self.client_socket.close()
+    def run(self):
+        while True:
+            try:
+                datas = self.workQueue.get()
+                self.worker.run(datas)
+            except Queue.Empty:  # 任务队列空的时候结束此线程
+                time.sleep(1) 
+                #break
+            except:
+                print sys.exc_info()
+                raise
 
-    def accept_request(self):
-        client_content = ''
-        EOL1 = b'\n\n'
-        EOL2 = b'\n\r\n'
-        while EOL1 not in client_content and EOL2 not in client_content:
-            client_content = self.client_socket.recv(1024)
-            break
-        client_content = client_content.strip()
-        
-        logger.debug(client_content)
-        arr = client_content.split('\n')
-        #logger.debug(arr[0])
+
+class EpollWorker(object):
+    """async version worker"""
+    def __init__(self):
+        pass
+
+    def run(self, datas): 
+        """
+        :param datas: format datas={'in':, 'out':,}
+        """
+        arr = datas['in'].split('\n')
         method, url, version = arr[0].split()
-        method = method.upper()
-        #self.client_socket.sendall('begin process')
-        if method not in (GET, POST, HEAD):
-            return self.server_error()
-         
-        cgi = False
-        query_string = '' 
-        pos = 0
-        r_path = url
-        if method == POST:
-            cgi = True 
-        elif method == GET:
-            pos = url.find('?')
-            if pos != -1:
-                cgi = True
-                query_string = url[pos+1:]
-                r_path  = url[0:pos]
-    
-    
-        r_path = '{0}/{1}'.format(FILEPATH, r_path)
-        logger.debug('r_path={0} cgi={1} query_string={2}'.format(r_path, cgi, query_string))
-        if cgi:
-            self.execute_cgi(r_path, query_string)
-        else:
-            self.serve_file(r_path)
         
-        return str(id)
-    
-    def execute_cgi(self, filename, query_string):
-        if not os.path.isfile(filename):
-            return self.not_found()
-        if not os.access(filename, os.X_OK):
-            return self.forbidden()
+        request_path = '{0}/{1}'.format(
+                       FILEPATH, url.split('?')[0])
         
-        env = os.environ
-        arr = query_string.split('&')
-        for item in arr:
-            if item.strip() != '' and not self.param_pattern.match(item):
-                return self.bad_request()
-            k, v = item.split('=')
-            #yet, not use os.putenv
-            env[k] = v
+        with open(request_path, 'r') as f:
+            contents = f.read()
+        datas['out'] = """
+                    HTTP/1.0 200 OK\r\n
+                    Content-Type: text/html\r\n
+                    \r\n
+                    <html>
+                    <head><title>{0}</title></head>
+                    <body><pre>{1}</pre></body>
+                    </html>
+                    \r\n
+                    """.format(request_path, contents)
         
-        self.headers()    
-        pid = os.fork()
-        if pid == 0:
-            #for example purpose
-            os.execve('/bin/ls', ['/home/charlie/'], env)
-        else:
-            os.waitpid(pid, 0)
-
-    def serve_file(self, filename):
-        if not os.path.isfile(filename): 
-            return self.not_found()
-        if not os.access(filename, os.R_OK):
-            return self.forbidden()
-        
-        self.headers()
-        with open(filename, 'r') as f:
-            self.client_socket.send(
-                   """
-                <html>
-                   <head>
-                    <title>{0}</title> 
-                   </head>
-                   <body>
-                    <pre>{1}</pre>
-                   </body>
-                </html>""".format(filename, f.read())
-                )
-    
-    def headers(self):
-        headers = [
-                    "HTTP/1.0 200 OK\r\n",
-                    "Content-Type: text/html\r\n",
-                    "\r\n"
-                   ]
-        for i in headers:
-            self.client_socket.send(i)
-
-    def bad_request(self):
-        contents = [
-                    "HTTP/1.0 400 BAD REQUEST\r\n",
-                    "Content-Type: text/html\r\n",
-                    "\r\n",
-                    "<html>",
-                    "<title>bad request</title>",
-                    "<body><p>bad request</p></body>",
-                    "</html>"
-                    ]
-        for i in contents:
-            self.client_socket.send(i)
-
-    def unauthorized(self):
-        contents = [
-                    "HTTP/1.0 401 UNAUTHORIZED\r\n",
-                    "Content-Type: text/html\r\n",
-                    "\r\n",
-                    "<html>",
-                    "<title>401 unauthorized</title>"
-                    "<body><p>bad request</p></body>",
-                    "</html>"
-                    ]
-        for i in contents:
-            self.client_socket.send(i)
-
-    def forbidden(self):
-        contents = [
-                    "HTTP/1.0 403 FORBIDDEN\r\n",
-                    "Content-Type: text/html\r\n",
-                    "\r\n",
-                    "<html>",
-                    "<title>403 forbidden</title>",
-                    "<body><p>forbidden!</p></body>",
-                    "</html>"
-                    ]
-        for i in contents:
-            self.client_socket.send(i)
-
-   
-    def not_found(self):
-        contents = [
-                    "HTTP/1.0 404 NOT FOUND\r\n",
-                    "Content-Type: text/html\r\n",
-                    "\r\n",
-                    "<html>",
-                    "<title>404 not found</title>",
-                    "<body><p>the content you search for not found on the server</body>",
-                    "</html>"
-                    ]
-        for i in contents:
-            self.client_socket.send(i)
-    
-    def server_error(self):
-        contents = [
-                    "HTTP/1.0 500 Internal Server Error\r\n",
-                    "Content-Type: text/html\r\n",
-                    "\r\n",
-                    "<html>",
-                    "<title>505 server error</title>",
-                    "<body><p>server error</p></body>",
-                    "</html>"
-                    ]
-        for i in contents:
-            self.client_socket.send(i)
-    
-    def not_implemented(self):
-        contents = [
-                    "HTTP/1.0 501 NOT IMPLEMENTED\r\n",
-                    "Content-Type: text/html\r\n",
-                    "\r\n",
-                    "<html>",
-                    "<title>501 not implemented",
-                    "<body><p>501 not implemented</p></body>",
-                    "</html>"
-                    ]
-        for i in contents:
-            self.client_socket.send(i)
-
+        #import pprint
+        #print 'datas = '
+        #pprint.pprint(datas)
 
 if __name__ == '__main__':
     logger = config_log()
     args = parse_argument()
     ip, port = args.ip, args.port
-    HttpDeamon(ip, port).run()
-    #HttpDeamon(ip, port).epoll_run()
+    #HttpDeamon(ip, port).run()
+    HttpDeamon(ip, port).epoll_run()
