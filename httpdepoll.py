@@ -31,6 +31,8 @@ import time
 import logging
 import errno
 
+import reactor
+
 from threadpool import ThreadPool
 
 FILEPATH = '/home/charlie/tinyhttpd/'
@@ -81,6 +83,17 @@ def parse_argument():
     return parser.parse_args()
 
 
+def singleton(cls, *args, **kwargs):
+    """singleton mode, used for decorator"""
+    instances = {}
+
+    def _singleton(*args, **kwargs):
+        if cls not in instances:
+            instances[cls] = cls(*args, **kwargs)
+        return instances[cls]
+    return _singleton
+
+
 def daemonize(stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
     """daemonize the process, no need to start the process in nohup way"""
     try:
@@ -114,7 +127,25 @@ def daemonize(stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
     os.dup2(se.fileno(), sys.stderr.fileno())
 
 
+class SingletonCls(type):
+
+    """it can be used as meta class"""
+
+    def __init__(cls, name, bases, dict):
+        super(SingletonCls, cls).__init__(name, bases, dict)
+        cls._instance = None
+
+    def __call__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(SingletonCls, cls).__call__(*args, **kwargs)
+        return cls._instance
+
+
+# use meta class instread
+#@singleton
 class HttpDeamon(object):
+
+    __metaclass__ = SingletonCls
 
     def __init__(self, ip, port, threadnum=100):
         self.ip = ip
@@ -132,7 +163,8 @@ class HttpDeamon(object):
         # self.server_socket = self.startup(self.ip, self.port)
 
         try:
-            epoll_fd = select.epoll()
+            # epoll_fd = select.epoll()
+            epoll_fd = reactor.Reactor()
             # epoll_fd.register(self.server_socket.fileno(), select.EPOLLIN)
             epoll_fd.register(
                 self.server_socket.fileno(), select.EPOLLIN | select.EPOLLERR | select.EPOLLHUP)
@@ -326,16 +358,8 @@ class EpollWorker(object):
 
         with open(request_path, 'r') as f:
             contents = f.read()
-        datas['out'] = """
-                    HTTP/1.0 200 OK\r\n
-                    Content-Type: text/html\r\n
-                    \r\n
-                    <html>
-                    <head><title>{0}</title></head>
-                    <body><pre>{1}</pre></body>
-                    </html>
-                    \r\n
-                    """.format(request_path, contents)
+        datas['out'] = "HTTP/1.0 200 OK\r\n Content-Type: text/html\r\n \r\n <html> <head><title>{0}</title></head> <body><pre>{1}</pre></body> </html> \r\n".format(
+            request_path, contents)
 
         logger.debug("{0}:{1} worker end".format(
             datas['ip'], datas['port']))
@@ -349,4 +373,5 @@ if __name__ == '__main__':
     ip, port = args.ip, args.port
     logger = config_log()
     # daemonize()
-    HttpDeamon(ip, port).epoll_run()
+    inst = HttpDeamon(ip, port)
+    inst.epoll_run()

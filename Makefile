@@ -12,5 +12,8 @@ client: client.c
 threadexample: threadexample.c
 		gcc -W -Wall threadexample.c -o threadexample -lpthread
 
+clone: clone.c
+		gcc -W -Wall clone.c -o clone
+
 clean:
 		rm httpd client threadexample

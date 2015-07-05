@@ -1,6 +1,8 @@
 /**********************************************************************/
-/*Rewrite a python version, other day!!!*/
-/*add by charliezhao*/
+/*ToDo:
+ * replace fork with clone
+ *
+ *add by charliezhao*/
 /**********************************************************************/
 
 
