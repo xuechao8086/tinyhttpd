@@ -1,12 +1,12 @@
 #!/usr/bin/env python2.7
-#coding:utf-8
+# coding:utf-8
 
 """
 Author:         charliezhao
 Filename:       selecteator.py
 Create Time:    2015-07-05 06:11
 Description:
-                
+
 """
 import thread
 import threading
@@ -14,6 +14,55 @@ import copy
 
 from select import select
 from collections import defaultdict
+
+
+class SelectReactor(object):
+    EV_NULL = 0x00
+    EV_DISCONNECTED = 0x18
+    EV_IN = 0x01
+    EV_OUT = 0x04
+
+    def __init__(self):
+        self._r_list = set()
+        self._w_list = set()
+        self._x_list = set()
+
+    def register(self,  fd, mode):
+        if mode & self.EV_IN:
+            self._r_list.add(fd)
+        if mode & self.EV_OUT:
+            self._w_list.add(fd)
+        self._x_list.add(fd)
+
+    def unregister(self, fd):
+        self._r_list.discard(fd)
+        self._w_list.discard(fd)
+        self._x_list.discard(fd)
+
+    def modify(self, fd, mode):
+        if mode & self.EV_IN:
+            self._r_list.add(fd)
+        else:
+            self._r_list.discard(fd)
+
+        mod_w = False
+        if mode & self.EV_OUT:
+            self._w_list.add(fd)
+            mod_w = True
+        else:
+            self._w_list.discard(fd)
+        self._x_list.add(fd)
+
+    def poll(self, timeout=-1):
+        """return an iterator"""
+        results = defaultdict(lambda: self.EV_NULL)
+
+        r, w, x = select(self._r_list, self._w_list, self._x_list)
+        for p in (r, self.EV_IN), (w, self.EV_OUT), (x, self.EV_DISCONNECTED):
+            for fd in p[0]:
+                results[fd] |= p[1]
+
+        return results.iteritems()
 
 
 def check_read_ev(ev_fd):
@@ -27,14 +76,19 @@ def check_read_ev(ev_fd):
     except Exception, e:
         print str(e)
         pass
-    
+
     ev_fd._lock.acquire()
     ev_fd.r = r
     ev_fd._lock.release()
     ev_fd._has_ev.set()
 
 
-class SelectReactor(object):
+class SelectReactorDiscard(object):
+
+    """
+    because the poll method, poll fd which can be write fisrt, not suitable in this env,
+    so discard and write a new one
+    """
     EV_NULL = 0x00
     EV_DISCONNECTED = 0x18
     EV_IN = 0x01
@@ -71,8 +125,8 @@ class SelectReactor(object):
             self._start_read_ev.set()
         self.r = set()
         self._lock.release()
-    
-        results = defaultdict(lambda: set.EV_NULL)
+
+        results = defaultdict(lambda: self.EV_NULL)
         for p in [(r_list, self.EV_IN), (self.w, self.EV_OUT), (self.x, self.EV_DISCONNECTED)]:
             for fd in p[0]:
                 results[fd] |= p[1]
@@ -83,9 +137,9 @@ class SelectReactor(object):
         return results.items()
 
     def register(self, fd, mode):
-        if mode&self.EV_IN:
+        if mode & self.EV_IN:
             self._r_list.add(fd)
-        if mode&self.EV_OUT:
+        if mode & self.EV_OUT:
             self._w_list.add(fd)
         self._x_list.add(fd)
 
@@ -95,15 +149,15 @@ class SelectReactor(object):
         self._x_list.discard(fd)
 
     def modify(self, fd, mode):
-        if mode&self.EV_IN:
+        if mode & self.EV_IN:
             self._r_list.add(fd)
         else:
             self._r_list.discard(fd)
-        
-        mode_w = False
-        if mode&self.EV_OUT:
+
+        mod_w = False
+        if mode & self.EV_OUT:
             self._w_list.add(fd)
-            mode_w = True
+            mod_w = True
         else:
             self._w_list.discard(fd)
         self._x_list.add(fd)
@@ -111,30 +165,6 @@ class SelectReactor(object):
         if mod_w:
             self._has_ev.set()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 if __name__ == '__main__':
-    #start here....
-    pass     
-     
-     
+    # start here....
+    pass

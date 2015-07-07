@@ -8,7 +8,7 @@ Create Time:    2015-07-01 23:37
 Description:
     python version tiny httpd for study purpose
 ToDo:
-    implement the httpd protocol.
+    keep-alive issue
 Memo:
     pep8
     autopep8 check.
@@ -30,6 +30,8 @@ import sys
 import time
 import logging
 import errno
+import StringIO
+import gzip
 
 import reactor
 
@@ -39,6 +41,31 @@ FILEPATH = '/home/charlie/tinyhttpd/'
 GET = 'GET'
 POST = 'POST'
 HEAD = 'HEAD'
+
+
+def compact_tracebak():
+    """format exception output"""
+    t, v, tb = sys.exc_info()
+    tbinfo = []
+    if not tb:
+        raise AssertionError("traceback does not exist")
+    while tb:
+        tbinfo.append((
+            tb.tb_frame.f_code.co_filename,
+            tb.tb_frame.f_code.co_name,
+            str(tb.tf_lineno),
+        ))
+        tb = tb.tb_next
+
+    del tb
+    file, funcion, line = tbinfo[-1]
+    info = ' '.join('[%s|%s|%s]' % x for x in tbinfo)
+    return (file, funcion, line), t, v, info
+
+# try:
+#    0=1
+# except:
+#    print compact_tracebak()
 
 
 def config_log():
@@ -127,17 +154,17 @@ def daemonize(stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
     os.dup2(se.fileno(), sys.stderr.fileno())
 
 
-class SingletonCls(type):
+class ClsSingleton(type):
 
     """it can be used as meta class"""
 
     def __init__(cls, name, bases, dict):
-        super(SingletonCls, cls).__init__(name, bases, dict)
+        super(ClsSingleton, cls).__init__(name, bases, dict)
         cls._instance = None
 
     def __call__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(SingletonCls, cls).__call__(*args, **kwargs)
+            cls._instance = super(ClsSingleton, cls).__call__(*args, **kwargs)
         return cls._instance
 
 
@@ -145,7 +172,7 @@ class SingletonCls(type):
 #@singleton
 class HttpDeamon(object):
 
-    __metaclass__ = SingletonCls
+    __metaclass__ = ClsSingleton
 
     def __init__(self, ip, port, threadnum=100):
         self.ip = ip
@@ -164,6 +191,7 @@ class HttpDeamon(object):
 
         try:
             # epoll_fd = select.epoll()
+            # note: maybe use select, not epoll
             epoll_fd = reactor.Reactor()
             # epoll_fd.register(self.server_socket.fileno(), select.EPOLLIN)
             epoll_fd.register(
@@ -184,6 +212,7 @@ class HttpDeamon(object):
         last_time = -1
         while True:
             epoll_list = epoll_fd.poll()
+
             for fd, events in epoll_list:
                 if fd == self.server_socket.fileno():
                     conn, (ip, port) = self.server_socket.accept()
@@ -233,9 +262,9 @@ class HttpDeamon(object):
                         trans_len += connections[fd].send(data)
                         params[fd]['time'] = time.time()
                         if trans_len == data_len:
+                            close_fd(fd)
                             break
                         # for http protocol, close it direct
-                    close_fd(fd)
                     # epoll_fd.modify(fd, select.EPOLLIN|select.EPOLLET)
                 else:
                     continue
@@ -320,7 +349,7 @@ class LocalThread(threading.Thread):
         self.setDaemon(True)
         self.workQueue = workQueue
         self.resultQueue = resultQueue
-        self.worker = EpollWorker()
+        self.worker = ClsWorker()
         self.start()
 
     def run(self):
@@ -336,36 +365,146 @@ class LocalThread(threading.Thread):
                 raise
 
 
-class EpollWorker(object):
+@singleton
+class ClsHttpUtility(object):
+    _100 = 'HTTP/1.0 100 CONTINUE'
+    _101 = 'HTTP/1.0 101 SWITCHING PROTOCOL'
+    _102 = 'HTTP/1.0 102 PROCESSING'
+
+    _200 = 'HTTP/1.0 200 OK'
+    _201 = 'HTTP/1.0 201 CREATED'
+    _202 = 'HTTP/1.0 202 ACCEPTED'
+    _203 = 'HTTP/1.0 203 NON-AUTHORIATIVE INFORMATION'
+    _204 = 'HTTP/1.0 204 NO CONETENT'
+    _205 = 'HTTP/1.0 205 RESET CONTENT'
+    _206 = 'HTTP/1.0 206 PARTIAL CONTENT'
+    _207 = 'HTTP/1.0 207 MULTI-STATUS'
+
+    _300 = 'HTTP/1.0 300 MULTIPLE CHOICES'
+    _301 = 'HTTP/1.0 301 MOVED PERMANENTLY'
+    _302 = 'HTTP/1.0 302 FOUND'
+    _303 = 'HTTP/1.0 303 SEE OTHER'
+    _304 = 'HTTP/1.0 304 NOT MODIFIED'
+    _305 = 'HTTP/1.0 305 USE PROXY'
+    _307 = 'HTTP/1.0 307 TEMPORARY REDIRECT'
+
+    _400 = 'HTTP/1.0 400 BAD REQUEST'
+    _401 = 'HTTP/1.0 401 UNAUTHORIZED'
+    _402 = 'HTTP/1.0 402 PAYMENT GRANTED'
+    _403 = 'HTTP/1.0 403 FORBIDDEN'
+    _404 = 'HTTP/1.0 404 FILE NOT FOUND'
+    _405 = 'HTTP/1.0 405 METHOD NOT ALLOWED'
+    _406 = 'HTTP/1.0 406 NOT ACCEPTABLE'
+    _407 = 'HTTP/1.0 407 PROXY AUTHENTICATION REQUIRED'
+    _408 = 'HTTP/1.0 408 REQUEST TIME-OUT'
+    _409 = 'HTTP/1.0 409 CONFLICT'
+    _410 = 'HTTP/1.0 410 GONE'
+    _411 = 'HTTP/1.0 411 LENGTH REQUIRED'
+    _412 = 'HTTP/1.0 412 PRECONDITION FAILED'
+    _413 = 'HTTP/1.0 413 REQUEST ENTITY TOO LARGE'
+    _414 = 'HTTP/1.0 414 REQUEST-URI TOO LARGE'
+    _415 = 'HTTP/1.0 415 UNSUPPORTED MEDIA TYPE'
+    _416 = 'HTTP/1.0 416 REQUESTED RANGE NOT SATISFIABLE'
+    _417 = 'HTTP/1.0 417 EXPECTATION FAILED'
+    _422 = 'HTTP/1.0 422 UNPROCESSABLE ENTITY'
+    _423 = 'HTTP/1.0 423 LOCKED'
+    _424 = 'HTTP/1.0 424 FAILED DEPENDENCY'
+
+    _500 = 'HTTP/1.0 500 INTERNAL SERVER ERROR'
+    _501 = 'HTTP/1.0 501 NOT IMPLEMENTED'
+    _502 = 'HTTP/1.0 502 BAD GATEWAY'
+    _503 = 'HTTP/1.0 503 SERVICE UNAVAILABLE'
+    _504 = 'HTTP/1.0 504 GATEWAY TIMEOUT'
+    _505 = 'HTTP/1.0 505 HTTP VERSION NOT SUPPORTED'
+    _506 = 'HTTP/1.0 506 INSUFFICIENT STORAGE'
+
+    head = "{0}\r\n\
+Server:tinyhttp/01\r\n\
+Content-type:text/html\r\n\
+\r\n\
+"
+
+    template = head + "<html>\r\n\
+<head><title>{1}</title></head>\r\n\
+<body>{2}</body>\r\n\
+</html>"
+
+
+class ClsWorker(object):
 
     """async version worker"""
 
     def __init__(self):
-        pass
+        self.utility = ClsHttpUtility()
 
     def run(self, datas):
         """
-        :param datas: format datas={'in':, 'out':,}
+        :param datas: datas={'in':, 'out':,}
         """
         logger.debug("{0}:{1} worker begin".format(
             datas['ip'], datas['port']))
 
         arr = datas['in'].split('\n')
         method, url, version = arr[0].split()
+        
+        gzip = False
+        for line in arr[1:]:
+            if line.find('Accept-Encoding') != -1:
+                if line.find('gzip') != -1:
+                    gzip = True
 
-        request_path = '{0}/{1}'.format(
-                       FILEPATH, url.split('?')[0])
-
-        with open(request_path, 'r') as f:
-            contents = f.read()
-        datas['out'] = "HTTP/1.0 200 OK\r\n Content-Type: text/html\r\n \r\n <html> <head><title>{0}</title></head> <body><pre>{1}</pre></body> </html> \r\n".format(
-            request_path, contents)
+        request_path = url.split('?')[0]
+           
+        datas['out'] = self.serve_file(request_path, gzip)
 
         logger.debug("{0}:{1} worker end".format(
             datas['ip'], datas['port']))
-        # import pprint
-        # print 'datas = '
-        # pprint.pprint(datas)
+
+    def serve_file(self, request_path, compress=False):
+        if not os.path.exists(request_path):
+            request_path = '{0}/{1}'.format(
+                FILEPATH, request_path)
+
+        if not os.path.isfile(request_path):
+            return self.utility.template.format(
+                self.utility._404,
+                request_path,
+                "File not Found")
+
+        if not os.access(request_path, os.R_OK):
+            return self.utility.template.format(
+                self.utility._403,
+                request_path,
+                "Permission deny")
+
+        with open(request_path, 'r') as f:
+            contents = f.read()
+
+        filetype = request_path.split('.')[-1]
+        if compress:
+            buf = StringIO.StringIO()
+            f = gzip.GzipFile(mode='wb', fileobj=buf)
+            if filetype == "html":
+                f.write(contents)
+            else:
+                f.write("<html><head><title>{1}</title></head><body><pre>{1}</pre></body></html>".format(
+                    request_path,
+                    contents))
+            f.close()
+            contents = buf.getvalue()
+            result = "{0}\r\n\
+Content-Encoding:gzip\r\n\
+\r\n\
+{1}".format(self.utility._200, contents)
+        else:
+            if filetype in 'html':
+                result = self.utility.head.format(self.utility._200) + contents
+            else:
+                result = self.utility.template.format(
+                            self.utility._200,
+                            request_path,
+                            "<pre>{0}</pre>".format(contents))
+        return result
 
 
 if __name__ == '__main__':
