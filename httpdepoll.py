@@ -9,6 +9,7 @@ Description:
     python version tiny httpd for study purpose
 ToDo:
     keep-alive issue
+    python -m SimpleHTTPServer 8000, see the difference and modify it.
 Memo:
     pep8
     autopep8 check.
@@ -17,6 +18,7 @@ Memo:
 
 import argparse
 import os
+import posixpath
 import stat
 import socket
 import fcntl
@@ -29,6 +31,7 @@ import threading
 import sys
 import time
 import logging
+import mimetypes
 import errno
 import StringIO
 import gzip
@@ -56,7 +59,6 @@ def compact_tracebak():
             str(tb.tf_lineno),
         ))
         tb = tb.tb_next
-
     del tb
     file, funcion, line = tbinfo[-1]
     info = ' '.join('[%s|%s|%s]' % x for x in tbinfo)
@@ -367,56 +369,56 @@ class LocalThread(threading.Thread):
 
 @singleton
 class ClsHttpUtility(object):
-    _100 = 'HTTP/1.0 100 CONTINUE'
-    _101 = 'HTTP/1.0 101 SWITCHING PROTOCOL'
-    _102 = 'HTTP/1.0 102 PROCESSING'
+    _100 = "HTTP/1.0 100 CONTINUE"
+    _101 = "HTTP/1.0 101 SWITCHING PROTOCOL"
+    _102 = "HTTP/1.0 102 PROCESSING"
 
-    _200 = 'HTTP/1.0 200 OK'
-    _201 = 'HTTP/1.0 201 CREATED'
-    _202 = 'HTTP/1.0 202 ACCEPTED'
-    _203 = 'HTTP/1.0 203 NON-AUTHORIATIVE INFORMATION'
-    _204 = 'HTTP/1.0 204 NO CONETENT'
-    _205 = 'HTTP/1.0 205 RESET CONTENT'
-    _206 = 'HTTP/1.0 206 PARTIAL CONTENT'
-    _207 = 'HTTP/1.0 207 MULTI-STATUS'
+    _200 = "HTTP/1.0 200 OK"
+    _201 = "HTTP/1.0 201 CREATED"
+    _202 = "HTTP/1.0 202 ACCEPTED"
+    _203 = "HTTP/1.0 203 NON-AUTHORIATIVE INFORMATION"
+    _204 = "HTTP/1.0 204 NO CONETENT"
+    _205 = "HTTP/1.0 205 RESET CONTENT"
+    _206 = "HTTP/1.0 206 PARTIAL CONTENT"
+    _207 = "HTTP/1.0 207 MULTI-STATUS"
 
-    _300 = 'HTTP/1.0 300 MULTIPLE CHOICES'
-    _301 = 'HTTP/1.0 301 MOVED PERMANENTLY'
-    _302 = 'HTTP/1.0 302 FOUND'
-    _303 = 'HTTP/1.0 303 SEE OTHER'
-    _304 = 'HTTP/1.0 304 NOT MODIFIED'
-    _305 = 'HTTP/1.0 305 USE PROXY'
-    _307 = 'HTTP/1.0 307 TEMPORARY REDIRECT'
+    _300 = "HTTP/1.0 300 MULTIPLE CHOICES"
+    _301 = "HTTP/1.0 301 MOVED PERMANENTLY"
+    _302 = "HTTP/1.0 302 FOUND"
+    _303 = "HTTP/1.0 303 SEE OTHER"
+    _304 = "HTTP/1.0 304 NOT MODIFIED"
+    _305 = "HTTP/1.0 305 USE PROXY"
+    _307 = "HTTP/1.0 307 TEMPORARY REDIRECT"
 
-    _400 = 'HTTP/1.0 400 BAD REQUEST'
-    _401 = 'HTTP/1.0 401 UNAUTHORIZED'
-    _402 = 'HTTP/1.0 402 PAYMENT GRANTED'
-    _403 = 'HTTP/1.0 403 FORBIDDEN'
-    _404 = 'HTTP/1.0 404 FILE NOT FOUND'
-    _405 = 'HTTP/1.0 405 METHOD NOT ALLOWED'
-    _406 = 'HTTP/1.0 406 NOT ACCEPTABLE'
-    _407 = 'HTTP/1.0 407 PROXY AUTHENTICATION REQUIRED'
-    _408 = 'HTTP/1.0 408 REQUEST TIME-OUT'
-    _409 = 'HTTP/1.0 409 CONFLICT'
-    _410 = 'HTTP/1.0 410 GONE'
-    _411 = 'HTTP/1.0 411 LENGTH REQUIRED'
-    _412 = 'HTTP/1.0 412 PRECONDITION FAILED'
-    _413 = 'HTTP/1.0 413 REQUEST ENTITY TOO LARGE'
-    _414 = 'HTTP/1.0 414 REQUEST-URI TOO LARGE'
-    _415 = 'HTTP/1.0 415 UNSUPPORTED MEDIA TYPE'
-    _416 = 'HTTP/1.0 416 REQUESTED RANGE NOT SATISFIABLE'
-    _417 = 'HTTP/1.0 417 EXPECTATION FAILED'
-    _422 = 'HTTP/1.0 422 UNPROCESSABLE ENTITY'
-    _423 = 'HTTP/1.0 423 LOCKED'
-    _424 = 'HTTP/1.0 424 FAILED DEPENDENCY'
+    _400 = "HTTP/1.0 400 BAD REQUEST"
+    _401 = "HTTP/1.0 401 UNAUTHORIZED"
+    _402 = "HTTP/1.0 402 PAYMENT GRANTED"
+    _403 = "HTTP/1.0 403 FORBIDDEN"
+    _404 = "HTTP/1.0 404 FILE NOT FOUND"
+    _405 = "HTTP/1.0 405 METHOD NOT ALLOWED"
+    _406 = "HTTP/1.0 406 NOT ACCEPTABLE"
+    _407 = "HTTP/1.0 407 PROXY AUTHENTICATION REQUIRED"
+    _408 = "HTTP/1.0 408 REQUEST TIME-OUT"
+    _409 = "HTTP/1.0 409 CONFLICT"
+    _410 = "HTTP/1.0 410 GONE"
+    _411 = "HTTP/1.0 411 LENGTH REQUIRED"
+    _412 = "HTTP/1.0 412 PRECONDITION FAILED"
+    _413 = "HTTP/1.0 413 REQUEST ENTITY TOO LARGE"
+    _414 = "HTTP/1.0 414 REQUEST-URI TOO LARGE"
+    _415 = "HTTP/1.0 415 UNSUPPORTED MEDIA TYPE"
+    _416 = "HTTP/1.0 416 REQUESTED RANGE NOT SATISFIABLE"
+    _417 = "HTTP/1.0 417 EXPECTATION FAILED"
+    _422 = "HTTP/1.0 422 UNPROCESSABLE ENTITY"
+    _423 = "HTTP/1.0 423 LOCKED"
+    _424 = "HTTP/1.0 424 FAILED DEPENDENCY"
 
-    _500 = 'HTTP/1.0 500 INTERNAL SERVER ERROR'
-    _501 = 'HTTP/1.0 501 NOT IMPLEMENTED'
-    _502 = 'HTTP/1.0 502 BAD GATEWAY'
-    _503 = 'HTTP/1.0 503 SERVICE UNAVAILABLE'
-    _504 = 'HTTP/1.0 504 GATEWAY TIMEOUT'
-    _505 = 'HTTP/1.0 505 HTTP VERSION NOT SUPPORTED'
-    _506 = 'HTTP/1.0 506 INSUFFICIENT STORAGE'
+    _500 = "HTTP/1.0 500 INTERNAL SERVER ERROR"
+    _501 = "HTTP/1.0 501 NOT IMPLEMENTED"
+    _502 = "HTTP/1.0 502 BAD GATEWAY"
+    _503 = "HTTP/1.0 503 SERVICE UNAVAILABLE"
+    _504 = "HTTP/1.0 504 GATEWAY TIMEOUT"
+    _505 = "HTTP/1.0 505 HTTP VERSION NOT SUPPORTED"
+    _506 = "HTTP/1.0 506 INSUFFICIENT STORAGE"
 
     head = "{0}\r\n\
 Server:tinyhttp/01\r\n\
@@ -433,6 +435,20 @@ Content-type:text/html\r\n\
 class ClsWorker(object):
 
     """async version worker"""
+    if not mimetypes.inited:
+        mimetypes.init()
+    extensions_map = mimetypes.types_map.copy()
+    extensions_map.update({
+        "": "application/octet-stream",
+            ".py": "text/plain",
+            ".c": "text/plain",
+            ".h": "text/plain",
+    })
+
+    weekdayname = ["Mon", "Tue", "Web", "Thu", "Fri", "Sat", "Sun"]
+    monthname = [None,
+                 "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dev"]
 
     def __init__(self):
         self.utility = ClsHttpUtility()
@@ -446,7 +462,7 @@ class ClsWorker(object):
 
         arr = datas['in'].split('\n')
         method, url, version = arr[0].split()
-        
+
         gzip = False
         for line in arr[1:]:
             if line.find('Accept-Encoding') != -1:
@@ -454,7 +470,7 @@ class ClsWorker(object):
                     gzip = True
 
         request_path = url.split('?')[0]
-           
+
         datas['out'] = self.serve_file(request_path, gzip)
 
         logger.debug("{0}:{1} worker end".format(
@@ -480,6 +496,9 @@ class ClsWorker(object):
         with open(request_path, 'r') as f:
             contents = f.read()
 
+        timestamp = self.date_time_string()
+        logger.debug("timestr = {0}".format(timestamp))
+
         filetype = request_path.split('.')[-1]
         if compress:
             buf = StringIO.StringIO()
@@ -501,10 +520,75 @@ Content-Encoding:gzip\r\n\
                 result = self.utility.head.format(self.utility._200) + contents
             else:
                 result = self.utility.template.format(
-                            self.utility._200,
-                            request_path,
-                            "<pre>{0}</pre>".format(contents))
+                    self.utility._200,
+                    request_path,
+                    "<pre>{0}</pre>".format(contents))
         return result
+
+    def guess_type(self, path):
+        """more accurate, use it later"""
+        base, ext = posixpath.splitext(path)
+        if ext in self.extensions_map:
+            return self.extensions_map[ext]
+        if ext.lower() in self.extensions_map:
+            return self.extensions_map[ext]
+        else:
+            return self.extensions_map[ext]
+
+    def date_time_string(self, timestamp=None):
+        if timestamp is None:
+            timestamp = time.time()
+        year, month, day, hh, mm, ss, wd, y, z = time.gmtime(timestamp)
+        # s = "%02d/%3s/%04d %02d:%02d:%02d"%(
+        #        day, self.monthname[month], year, hh, mm, ss)
+
+        s = "%s, %02d %3s %4d %02d:%02d:%02d GMT" % (
+            self.weekdayname[wd],
+            day, self.monthname[month], year,
+            hh, mm, ss)
+        return s
+
+class ForkingMixIn:
+    timeout = 300
+    active_children = None
+    max_children = 40
+
+    def collection_child(self):
+        if self.active_children is None:
+            return
+        while len(self.active_children) >= self.max_children:
+            try:
+                pid, status = os.waitpid(0, 0)
+            except os.error:
+                pid = None
+            if pid not in self.active_children:
+                continue
+
+        for child in self.active_children:
+            try:
+                pid, status = os.waitpid(child, os.WHOHANG)
+            except os.error:
+                pid = None
+            if not pid: continue
+            try:
+                self.active_children.remove(pid)
+            except ValueError, e:
+                raise("%s x=%d and list=%r"% (e.message, pid,
+                                              self.active_children))
+    def handle_timeout(self):
+        self.collection_child()
+
+    def process_request(self, request, client_address):
+        self.collection_child()
+        pid = os.fork()
+        if pid:
+            if self.active_children is None:
+                self.active_children = []
+            self.active_children.append(pid)
+            return
+        else:
+            try:
+                #to be continue
 
 
 if __name__ == '__main__':

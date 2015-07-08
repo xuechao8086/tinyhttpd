@@ -504,9 +504,9 @@ def main():
     if o == '-i':
       msgfile = k
 
-  m = decode_email(msgfile)
-  print m
-  print
+  #m = decode_email(msgfile)
+  #print m
+  #print
   #print m['date'].isoformat()
   print decode_email(msgfile, include_raw_body=True, include_attachment_data=True)
 

@@ -9,6 +9,7 @@ Description:
     send mail program
 Todo:
     bug fix
+    getpass module for password.
 """
 import argparse
 import logging
