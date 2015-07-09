@@ -16,6 +16,8 @@ Memo:
     yapf check.
 """
 
+__version__ = "0.1"
+
 import argparse
 import os
 import posixpath
@@ -40,7 +42,8 @@ import reactor
 
 from threadpool import ThreadPool
 
-FILEPATH = '/home/charlie/tinyhttpd/'
+#FILEPATH = '/home/charlie/tinyhttpd/'
+FILEPATH = "/home/charlie/swift/doc/build/html"
 GET = 'GET'
 POST = 'POST'
 HEAD = 'HEAD'
@@ -171,7 +174,7 @@ class ClsSingleton(type):
 
 
 # use meta class instread
-#@singleton
+# @singleton
 class HttpDeamon(object):
 
     __metaclass__ = ClsSingleton
@@ -210,7 +213,15 @@ class HttpDeamon(object):
             epoll_fd.unregister(fd)
             connections[fd].close()
             del params[fd]
-
+        
+        def reset_fd(fd):
+            logger.debug("{0}:{1} reset".format(
+                params[fd]['ip'], params[fd]['port']))
+            params['time'] = time.time()
+            params[fd]['in'] = None
+            params[fd]['out'] = None
+            epoll_fd.modify(fd, select.EPOLLIN) 
+            
         last_time = -1
         while True:
             epoll_list = epoll_fd.poll()
@@ -265,6 +276,7 @@ class HttpDeamon(object):
                         params[fd]['time'] = time.time()
                         if trans_len == data_len:
                             close_fd(fd)
+                            #reset_fd(fd)
                             break
                         # for http protocol, close it direct
                     # epoll_fd.modify(fd, select.EPOLLIN|select.EPOLLET)
@@ -274,8 +286,9 @@ class HttpDeamon(object):
             # close unactive sockets, 10 mins!
             cur_time = time.time()
             if cur_time - last_time > 600:
+                last_time = time.time()
                 for fd, param in params.iteritems():
-                    if cur_time - param['time'] > 600:
+                    if cur_time - params[fd]["time"] > 600:
                         close_fd(fd)
 
         epoll_fd.close()
@@ -450,6 +463,74 @@ class ClsWorker(object):
                  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dev"]
 
+
+    responses = {
+        100: ('Continue', 'Request received, please continue'),
+        101: ('Switching Protocols',
+              'Switching to new protocol; obey Upgrade header'),
+
+        200: ('OK', 'Request fulfilled, document follows'),
+        201: ('Created', 'Document created, URL follows'),
+        202: ('Accepted',
+              'Request accepted, processing continues off-line'),
+        203: ('Non-Authoritative Information', 'Request fulfilled from cache'),
+        204: ('No Content', 'Request fulfilled, nothing follows'),
+        205: ('Reset Content', 'Clear input form for further input.'),
+        206: ('Partial Content', 'Partial content follows.'),
+
+        300: ('Multiple Choices',
+              'Object has several resources -- see URI list'),
+        301: ('Moved Permanently', 'Object moved permanently -- see URI list'),
+        302: ('Found', 'Object moved temporarily -- see URI list'),
+        303: ('See Other', 'Object moved -- see Method and URL list'),
+        304: ('Not Modified',
+              'Document has not changed since given time'),
+        305: ('Use Proxy',
+              'You must use proxy specified in Location to access this '
+              'resource.'),
+        307: ('Temporary Redirect',
+              'Object moved temporarily -- see URI list'),
+
+        400: ('Bad Request',
+              'Bad request syntax or unsupported method'),
+        401: ('Unauthorized',
+              'No permission -- see authorization schemes'),
+        402: ('Payment Required',
+              'No payment -- see charging schemes'),
+        403: ('Forbidden',
+              'Request forbidden -- authorization will not help'),
+        404: ('Not Found', 'Nothing matches the given URI'),
+        405: ('Method Not Allowed',
+              'Specified method is invalid for this resource.'),
+        406: ('Not Acceptable', 'URI not available in preferred format.'),
+        407: ('Proxy Authentication Required', 'You must authenticate with '
+              'this proxy before proceeding.'),
+        408: ('Request Timeout', 'Request timed out; try again later.'),
+        409: ('Conflict', 'Request conflict.'),
+        410: ('Gone',
+              'URI no longer exists and has been permanently removed.'),
+        411: ('Length Required', 'Client must specify Content-Length.'),
+        412: ('Precondition Failed', 'Precondition in headers is false.'),
+        413: ('Request Entity Too Large', 'Entity is too large.'),
+        414: ('Request-URI Too Long', 'URI is too long.'),
+        415: ('Unsupported Media Type', 'Entity body in unsupported format.'),
+        416: ('Requested Range Not Satisfiable',
+              'Cannot satisfy request range.'),
+        417: ('Expectation Failed',
+              'Expect condition could not be satisfied.'),
+
+        500: ('Internal Server Error', 'Server got itself in trouble'),
+        501: ('Not Implemented',
+              'Server does not support this operation'),
+        502: ('Bad Gateway', 'Invalid responses from another server/proxy.'),
+        503: ('Service Unavailable',
+              'The server cannot process the request due to a high load'),
+        504: ('Gateway Timeout',
+              'The gateway server did not receive a timely response'),
+        505: ('HTTP Version Not Supported', 'Cannot fulfill request.'),
+        }
+
+
     def __init__(self):
         self.utility = ClsHttpUtility()
 
@@ -496,33 +577,45 @@ class ClsWorker(object):
         with open(request_path, 'r') as f:
             contents = f.read()
 
-        timestamp = self.date_time_string()
-        logger.debug("timestr = {0}".format(timestamp))
-
         filetype = request_path.split('.')[-1]
         if compress:
             buf = StringIO.StringIO()
             f = gzip.GzipFile(mode='wb', fileobj=buf)
-            if filetype == "html":
-                f.write(contents)
-            else:
-                f.write("<html><head><title>{1}</title></head><body><pre>{1}</pre></body></html>".format(
-                    request_path,
-                    contents))
+            
+            #if filetype == "html":
+            #    f.write(contents)
+            #else:
+            #    f.write("<html><head><title>{1}</title></head><body><pre>{1}</pre></body></html>".format(
+            #        request_path,
+            #        contents))
+
+            f.write(contents) 
+
             f.close()
             contents = buf.getvalue()
-            result = "{0}\r\n\
+            result = "{}\r\n\
+Date: {}\r\n\
+Server: tinyhttpd/0.1\r\n\
 Content-Encoding:gzip\r\n\
+Content-Type: {}\r\n\
 \r\n\
-{1}".format(self.utility._200, contents)
+{}\
+\r\n".format(self.utility._200,
+             self.date_time_string(),
+             self.guess_type(request_path),
+             contents)
         else:
-            if filetype in 'html':
-                result = self.utility.head.format(self.utility._200) + contents
-            else:
-                result = self.utility.template.format(
-                    self.utility._200,
-                    request_path,
-                    "<pre>{0}</pre>".format(contents))
+            result = "{}\r\n\
+Date: {}\r\n\
+Server: tinyhttpd/0.1\r\n\
+Content-Encoding:gzip\r\n\
+Content-Type: {}\r\n\
+\r\n\
+{}\
+\r\n".format(self.utility._200,
+             self.date_time_string(),
+             self.guess_type(request_path),
+             contents)
         return result
 
     def guess_type(self, path):
@@ -589,7 +682,9 @@ class ForkingMixIn:
         else:
             try:
                 #to be continue
-
+                pass
+            except:
+                pass
 
 if __name__ == '__main__':
     args = parse_argument()
