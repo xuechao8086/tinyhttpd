@@ -40,8 +40,6 @@ import gzip
 
 import reactor
 
-from threadpool import ThreadPool
-
 #FILEPATH = '/home/charlie/tinyhttpd/'
 FILEPATH = "/home/charlie/swift/doc/build/html"
 GET = 'GET'
