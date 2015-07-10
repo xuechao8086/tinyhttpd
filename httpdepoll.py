@@ -81,7 +81,8 @@ def config_log():
     fh.setLevel(logging.INFO)
 
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
+    #ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.ERROR)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     formatter_full = logging.Formatter(
@@ -243,7 +244,7 @@ class HttpDeamon(object):
                     while True:
                         try:
                             data = connections[fd].recv(10)
-                            if not data and not datas:
+                            if not data:
                                 close_fd(fd)
                                 break
                             else:
@@ -251,8 +252,8 @@ class HttpDeamon(object):
                         except socket.error, msg:
                             if msg.errno == errno.EAGAIN:
                                 logger.debug("{0}".format(datas))
-                                params[fd]['in'] = datas
-                                params[fd]['time'] = time.time()
+                                params[fd]["in"] = datas
+                                params[fd]["time"] = time.time()
                                 # epoll_fd.modify(fd,
                                 # select.EPOLLOUT|select.EPOLLET)
                                 epoll_fd.modify(fd, select.EPOLLOUT)
@@ -598,6 +599,7 @@ Date: {}\r\n\
 Server: tinyhttpd/0.1\r\n\
 Content-Encoding:gzip\r\n\
 Content-Type: {}\r\n\
+Connection: close\r\n\
 \r\n\
 {}\
 \r\n".format(self.utility._200,
@@ -610,6 +612,7 @@ Date: {}\r\n\
 Server: tinyhttpd/0.1\r\n\
 Content-Encoding:gzip\r\n\
 Content-Type: {}\r\n\
+Connection: close\r\n\
 \r\n\
 {}\
 \r\n".format(self.utility._200,
