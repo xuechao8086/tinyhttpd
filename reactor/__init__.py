@@ -15,8 +15,8 @@ use_mod = None
 
 if "epoll" in select.__dict__:
     use_mod = "epoll"
-    from epollreactor import EpollReactor as Reactor
-    #from selectreactor import SelectReactor as Reactor
+    #from epollreactor import EpollReactor as Reactor
+    from selectreactor import SelectReactor as Reactor
 elif "kqueue" in select.__dict__:
     use_mod = "kqueue"
     from kqueuereactor import KqueueReactor as Reactor

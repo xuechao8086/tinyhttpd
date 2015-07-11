@@ -49,31 +49,10 @@ static const struct option long_options[] =
     {"options", no_argument, &method, METHOD_OPTIONS},
     {"trace", no_argument, &method, METHOD_TRACE},
     {"version", no_argument, NULL, 'V'},
-    {"proxy", required_argument, 'p'},
-    {"clients", required_argument, 'c'},
+    {"proxy", required_argument, NULL, 'p'},
+    {"clients", required_argument, NULL, 'c'},
     {NULL, 0, NULL, 0}
 };
-
-/*
-static const struct option long_options[]=
-{
- {"force",no_argument,&force,1},
- {"reload",no_argument,&force_reload,1},
- {"time",required_argument,NULL,'t'},
- {"help",no_argument,NULL,'?'},
- {"http09",no_argument,NULL,'9'},
- {"http10",no_argument,NULL,'1'},
- {"http11",no_argument,NULL,'2'},
- {"get",no_argument,&method,METHOD_GET},
- {"head",no_argument,&method,METHOD_HEAD},
- {"options",no_argument,&method,METHOD_OPTIONS},
- {"trace",no_argument,&method,METHOD_TRACE},
- {"version",no_argument,NULL,'V'},
- {"proxy",required_argument,NULL,'p'},
- {"clients",required_argument,NULL,'c'},
- {NULL,0,NULL,0}
-};
-*/
 
 static void benchcore(const char *host, const int port, const char *request);
 static int bench(void);
@@ -322,12 +301,14 @@ static int bench(void)
     for(i=0; i<clients; i++)
     {
         pid = fork();
+        /*note here, child process no more fork any process!!!*/
         if(pid <= (pid_t) 0)
         {
             sleep(1);
             break;
         }
     }
+    printf("pid = %d\n", (int)pid);
     if(pid < (pid_t) 0)
     {
         fprintf(stderr, "problems forking worker no. %d\n", i);
@@ -340,6 +321,16 @@ static int bench(void)
         else
             benchcore(proxyhost, proxyport, request);
 
+        f = fdopen(mypipe[1], "w");
+        if(f == NULL)
+        {
+            perror("open pipe for writing failed.");
+            return 3;
+        }
+        fprintf(f, "%d %d %d\n", speed, failed, bytes);
+        fclose(f);
+        return 0;
+    }else {
         f = fdopen(mypipe[0], "r");
         if(f == NULL)
         {
@@ -365,7 +356,7 @@ static int bench(void)
             if(--clients == 0)
                 break;
         }
-
+        fclose(f);
         printf("\nSpeed=%d pages/min %d bytes/sec. \n Requests: %d susceed, %d failed.\n", 
                 (int)((speed + failed)/(benchtime/60.0f)),
                 (int)(bytes/(float)benchtime), speed, failed);

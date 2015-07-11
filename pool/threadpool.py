@@ -2,7 +2,7 @@
 # coding:utf-8
 
 # Python的线程池实现
-
+import os
 import Queue
 import threading
 import sys
@@ -36,6 +36,33 @@ class MyThread(threading.Thread):
             except:
                 print sys.exc_info()
                 raise
+
+class ProcessPoll(object):
+    def __init__(self, num):
+        self.procs_num = num
+        self.procs = []
+    
+    def do_job(self, handler):
+        for i in xrange(0, self.procs_num):
+            pid = os.fork()
+            if pid < 0:
+                assert False
+            elif pid == 0:
+                break
+
+        if pid == 0:
+            handler()
+        else:
+            print "father process"
+
+
+def handler():
+    print "process handler" 
+
+
+def test_processpoll():
+    p = ProcessPoll(20)
+    p.do_job(handler)
 
 
 class ThreadPool(object):
@@ -88,7 +115,7 @@ def test():
 
 
 if __name__ == '__main__':
-    test()
+    test_processpoll()
 
 __author__ = 'charlie'
 
