@@ -37,6 +37,7 @@ import mimetypes
 import errno
 import StringIO
 import gzip
+import signal
 
 import reactor
 
@@ -79,8 +80,8 @@ def config_log():
     fh.setLevel(logging.INFO)
 
     ch = logging.StreamHandler()
-    #ch.setLevel(logging.DEBUG)
-    ch.setLevel(logging.ERROR)
+    ch.setLevel(logging.DEBUG)
+    #ch.setLevel(logging.ERROR)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     formatter_full = logging.Formatter(
@@ -127,9 +128,19 @@ def singleton(cls, *args, **kwargs):
 
 def daemonize(stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
     """daemonize the process, no need to start the process in nohup way"""
+    
+    def handle_exit(signum, _):
+        if signum == signal.SIGTERM:
+            sys.exit(0)
+
+    signal.signal(signal.SIGINT, handle_exit)
+    signal.signal(signal.SIGTERM, handle_exit)
+
     try:
         pid = os.fork()
+        assert pid != -1 
         if pid > 0:
+            time.sleep(5)
             sys.exit(0)
     except OSError, e:
         logger.error("fork #1 fail, errno:{0} {1}".format(e.errno, e.strerror))

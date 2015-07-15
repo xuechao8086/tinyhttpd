@@ -301,14 +301,14 @@ static int bench(void)
     for(i=0; i<clients; i++)
     {
         pid = fork();
-        /*note here, child process no more fork any process!!!*/
+        /*note here, child process no more fork any process, only father process can fork!!!*/
         if(pid <= (pid_t) 0)
         {
             sleep(1);
             break;
         }
     }
-    printf("pid = %d\n", (int)pid);
+    //printf("pid = %d\n", (int)pid);
     if(pid < (pid_t) 0)
     {
         fprintf(stderr, "problems forking worker no. %d\n", i);

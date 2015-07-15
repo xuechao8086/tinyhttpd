@@ -53,15 +53,16 @@ class ProcessPoll(object):
         if pid == 0:
             handler()
         else:
-            print "father process"
-
+            os.wait()
+            print "father process, wait over"
 
 def handler():
+    time.sleep(60)
     print "process handler" 
 
 
 def test_processpoll():
-    p = ProcessPoll(20)
+    p = ProcessPoll(5)
     p.do_job(handler)
 
 
