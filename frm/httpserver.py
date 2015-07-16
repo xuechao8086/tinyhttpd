@@ -18,7 +18,7 @@ def runsimple(func, server_address=("0.0.0.0", 8080)):
 
     try:
         server.start()
-    except (KeyboardInterrupt, SysExit):
+    except (KeyboardInterrupt, SystemExit):
         server.stop()
         server = None
 
