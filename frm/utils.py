@@ -438,7 +438,7 @@ def group(seq, size):
         [[1, 2], [3, 4], [5]]
     """
 
-    def toke(seq, n):
+    def take(seq, n):
         for i in xrange(n):
             yield seq.next()
 

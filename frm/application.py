@@ -8,6 +8,52 @@ Create Time:    2015-07-15 02:04
 Description:
 
 """
+
+
+# add by charliezhao
+import os, sys, time, inspect
+import pprint
+
+def _charlie_debug(args=""):
+    try:
+        raise Exception()
+    except Exception, e:
+        lineno = sys.exc_info()[2].tb_frame.f_back.f_lineno
+    
+    filename = os.path.basename(inspect.currentframe().f_code.co_filename)
+
+    timestamp = time.time()
+
+#     time_str = '{0} {1:.3f}'.format(
+#                time.strftime('%Y-%m-%d %H:%M:%S',
+#                              time.gmtime(timestamp + 28800)),  # GTM
+#                timestamp)
+
+    time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time()))
+
+    pid = os.getpid()
+    
+    print "{time_str} {pid} {filename}:{lineno} {args}\n".format(
+                                                                 time_str=time_str,
+                                                                 pid=pid,
+                                                                 filename=filename,
+                                                                 lineno=lineno,
+                                                                 args=args)
+#     with open('/tmp/swift-debug.log', 'a+') as f:
+#         # f.write("\033[31m{args_str}\033[0m\n".format(args_str=args_str))
+#         f.write("{time_str} {pid} {filename}:{lineno} {args_str}\n".format(
+#                 time_str=time_str,
+#                 pid=pid,
+#                 filename=filename,
+#                 lineno=lineno,
+#                 args_str=args_str))
+    return 0
+
+# end by charlie.
+
+
+
+
 import webapi as web
 import webapi
 import wsgi
@@ -83,7 +129,9 @@ class application:
         return browser.AppBrowser(self)
 
     def handle(self):
+        _charlie_debug("handle called")
         fn, args = self._match(self.mapping, web.ctx.path)
+        _charlie_debug("fn={}, args={}".format(fn, args))
         return self._delegate(fn, self.fvars, args)
 
     def handle_with_processors(self):
@@ -91,7 +139,11 @@ class application:
             try:
                 if processors:
                     p, processors = processors[0], processors[1:]
-                    return p(lambda: processors)
+                    # error way! for remember.
+                    # return p(lambda: processors)
+                    
+                    # right way:
+                    return p(lambda: process(processors))
                 else:
                     return self.handle()
             except web.HTTPError:
@@ -101,7 +153,7 @@ class application:
             except:
                 print >> web.debug, traceback.format_exc()
                 raise self.internalerror()
-
+        _charlie_debug("handle_with_processors called")
         return process(self.processors)
 
     def wsgifunc(self, *middleware):
@@ -128,8 +180,9 @@ class application:
             except web.HTTPError, e:
                 result = [e.data]
 
+            _charlie_debug("result={}".format(result))
             result = web.safestr(iter(result))
-
+            
             status, headers = web.ctx.status, web.ctx.headers
             start_resp(status, headers)
 
@@ -137,7 +190,14 @@ class application:
                 self._cleanup()
                 yield ''
 
-            return iterator.chain(result, cleanup())
+            return itertools.chain(result, cleanup())
+        
+        _charlie_debug("middleware=".format(middleware))
+        for m in middleware:
+            wsgi = m(wsgi)
+        return wsgi
+
+
 
     def run(self, *middleware):
         return wsgi.runwsgi(self.wsgifunc(*middleware))
@@ -174,14 +234,14 @@ class application:
             '://' + env.get('HTTP_HOST', '[unknown]')
         ctx.homepath = os.environ.get(
             'REAL_SCRIPT_NAME', env.get('SCRIPT_NAME'))
-        ctx.home = CTX.homedomain + CTX.homepath
+        ctx.home = ctx.homedomain + ctx.homepath
 
         ctx.realhome = ctx.home
-        ctx.ip = env.get['REMOTE_ADDR']
+        ctx.ip = env.get('REMOTE_ADDR')
         ctx.method = env.get('REQUEST_METHOD')
         ctx.path = env.get('PATH_INFO')
 
-        if env.get('SERVER_SOFTWARE', '').startwith('lighttpd/'):
+        if env.get('SERVER_SOFTWARE', '').startswith('lighttpd/'):
             ctx.path = lstrips(
                 env.get('REQUEST_URI').split('?')[0], ctx.homepath)
             ctx.path = urllib.unquote(ctx.path)
