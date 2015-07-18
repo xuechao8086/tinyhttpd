@@ -41,3 +41,5 @@
 * 对http刷新请求， 对比请求时间，和etag, 对比符合要求，则直接返回304 节约流量。
 * 假如浏览器支持， 则启用如gzip之类的压缩， 节约带宽。
 * browser.py 提供了一个http请求的模拟。 
+* httpdserver.py 中runbasic的WSGIServer基于SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer来实现的。
+* database.py 无需引用其他模块， 可独立使用。
