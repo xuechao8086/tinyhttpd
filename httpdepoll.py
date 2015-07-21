@@ -320,6 +320,19 @@ class HttpDeamon(object):
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         except socket.error, msg:
             self.exit_error("setsockopt error")
+        
+        try:
+            flags = fcntl.fcntl(s, fcntl.F_GETFD)
+            fcntl.fcntl(s, fcntl.F_SETFD, flags|fcntl.FD_CLOEXEC)
+        except socket.error, msg:
+            self.exit_error("fcntl failed")
+        
+        try:
+            flags = fcntl.fcntl(s, fcntl.F_GETFL)
+            fcntl.fcntl(s, fcntl.F_SETFL, flags|os.O_NONBLOCK)
+        except socket.error, msg:
+            self.exit_error("set nonblock failed.")
+
         try:
             s.bind((ip, port))
         except socket.error, msg:
