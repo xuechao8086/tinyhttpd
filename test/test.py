@@ -10,6 +10,51 @@ Description:
 """
 import sys
 import time
+
+import contextlib
+print 'note the difference, for the stackcontext'
+print '###################################'
+def error():
+    raise Exception, 'error'
+
+#@contextlib.contextmanager
+def func_first1():
+    return error
+
+def func_first2():
+    return func_first1()
+
+try:
+    func_first2()
+except:
+    print 'excepion in main'
+print '###################################'
+
+def error2():
+    raise Exception, 'error2'
+
+def func_sec1():
+    return error2()
+
+#@contextlib.contextmanager
+def func_sec2():
+    func_sec1()
+
+try:
+    func_sec2()
+except:
+    print 'excepion in main2'
+print '###################################'
+
+
+
+
+
+
+
+
+
+sys.exit()
 def iterview(x):
    """
    Takes an iterable `x` and returns an iterator over it
