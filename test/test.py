@@ -14,36 +14,52 @@ import time
 import contextlib
 print 'note the difference, for the stackcontext'
 print '###################################'
+global_dict = {}
+
 def error():
     raise Exception, 'error'
 
 #@contextlib.contextmanager
 def func_first1():
+    print "call func_first1"
     return error
 
 def func_first2():
-    return func_first1()
+    print "call func_first2"
+    return func_first1
+
+def env(func):
+    try:
+        func()
+    except Exception, e:
+        print e
 
 try:
-    func_first2()
+    t = func_first2()()
+    print t
 except:
-    print 'excepion in main'
+    print 'ERROR: excepion in main'
+
+
+
 print '###################################'
 
 def error2():
     raise Exception, 'error2'
 
 def func_sec1():
+    print "call func_sec1"
     return error2()
 
 #@contextlib.contextmanager
 def func_sec2():
+    print "call func_sec2"
     func_sec1()
 
 try:
     func_sec2()
 except:
-    print 'excepion in main2'
+    print 'ERROR: excepion in main2'
 print '###################################'
 
 
