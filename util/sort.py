@@ -277,6 +277,52 @@ def radixsort(l, scale):
 
 
 
+#####################################################
+#counting sort
+def counting_sort(A, B, k):
+    """caution: k must less then len(A)"""
+    C = [0 for i in xrange(0, k)]
+
+    for i in xrange(0, len(A)):
+        C[A[i]] = C[A[i]] + 1
+    for i in xrange(1, k):
+        C[i] += C[i-1]
+    for i in xrange(len(A)-1, -1, -1):
+        B[C[A[i]]] = A[i]
+        C[A[i]] -= 1
+    
+    return B
+
+
+#####################################################
+#bucket sort
+def bucket_sort(A):
+    n = len(A)
+    B = [[] for i in xrange(0, n)]
+    
+    def get_base():
+        prefix = 0
+        num = max(A)
+        while num >= n:
+            prefix += 1
+            num //= n
+        return prefix 
+
+    prefix = get_base()
+
+    for i in xrange(0, n):
+        pos = A[i]//n**prefix
+        m = len(B[pos])
+        if m == 0:
+            B[pos].append(A[i])
+        else:
+            for j in xrange(0, m):
+                if B[pos][j] >= A[i]:
+                    B[pos].insert(j, A[i])
+                    break
+    A = [j for i in xrange(n) for j in B[i]]
+    return A
+
 if __name__ == '__main__':
     print("heap sort:") 
     for i in xrange(10): 
@@ -321,3 +367,17 @@ if __name__ == '__main__':
         for j in (1, 10, 100): 
             radixsort(sl, j)
         sl.output()
+    
+    print("counting sort:")
+    for i in xrange(10):
+        A = [random.randint(0, 10)\
+             for i in xrange(0, random.randint(11, 20))]
+        B = [0 for i in xrange(0, len(A)+1)]
+        C = [0 for i in xrange(0, max(A)+1)]
+        print(counting_sort(A, B, max(A)+1))
+    
+    print("bucket sort:")
+    for i in xrange(10):
+        A = [random.randint(0, 100)\
+             for i in xrange(0, random.randint(5, 10))]
+        print(bucket_sort(A))
