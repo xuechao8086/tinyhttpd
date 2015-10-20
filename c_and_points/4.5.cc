@@ -9,7 +9,7 @@
 #define MAXLENGTH 128 
 #define MAXLINE 4 
 
-void delbalnk(char string[]);
+void delblank(char string[]);
 
 int main(int argc, char *argv[])
 { 
@@ -41,10 +41,16 @@ int main(int argc, char *argv[])
 //        std::cout<<"input[" <<i<<"] = "<<input[i]<<std::endl;
 //        ++i;
 //    }
+    
+//    char str[] = "xuechaozhao    tingting zhang";
+//    std::cout<<"origin string = "<<str<<std::endl;
+//    delblank(str);
+//    std::cout<<"string = "<<str<<std::endl;
 
     for(int cnt = 0; cnt < MAXLINE; ++cnt) {
         input[cnt] = (char *)malloc(MAXLENGTH*sizeof(char));
         gets(buffer);
+        delblank(buffer);
         strncpy(input[cnt], buffer, MAXLENGTH);
         *(input[cnt] + strlen(buffer)) = '\0';
     }
@@ -64,19 +70,30 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void delblank(char string[]) {
+void delblank(char str[]) {
     /*latter consider how to finish the function*/
-    char *origin = string;
+    char *origin = str;
 
-    for(char *i = string; *i != '\0'; ++i) {
-        if(*i != ' '){
-           continue;  
+    for(char *i = str; *i != '\0'; ++i) { 
+        if(*i != ' ')
+        { 
+            continue;  
         }
         else {
             int j = 0;
             while(*(i+j) == ' ') {
+                ++j;
             }
-            
+            --j;
+            if (j>1) {
+                for(char *k=i, *l=i+j; ; ++k, ++l) {
+                    *k = *l;
+                    if (*l == '\0') {
+                        *k = '\0';
+                        break;
+                    }
+                }
+            }
         }
     }
 }
