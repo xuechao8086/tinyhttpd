@@ -10,6 +10,7 @@
 #define MAXLINE 4 
 
 void delblank(char string[]);
+char * convert(char str[]);
 
 int main(int argc, char *argv[])
 { 
@@ -59,14 +60,32 @@ int main(int argc, char *argv[])
         std::cout<<"input["<<j<<"] = "<<input[j]<<std::endl;
     }
     
+    int k = 0;
     for(int i = 0; i < MAXLINE; ++i) {
         for (int j = i+1; j < MAXLINE; ++j) {
             if (strcmp(input[i], input[j]) == 0) {
-                std::cout<<"result = "<<input[i]<<std::endl;
+                bool mark = false;
+                for(int l = 0; l < k; ++l) {
+                    if (strcmp(input[i], output[l]) == 0) {
+                        mark = true;
+                        break;
+                    }
+                }
+                if(mark == false){
+                    output[k] = (char *)malloc(MAXLENGTH*sizeof(char));
+                    strncpy(output[k], input[i], MAXLENGTH);
+                    *(output[k]+strlen(input[i])+1) = '\0';
+                    ++k;
+                }
             }
         }
     }
     
+    for(int i = 0; i<k; ++i) {
+        std::cout<<"output["<<i<<"] = "<<output[i]<<std::endl;
+    }
+
+
     return 0;
 }
 
@@ -97,3 +116,14 @@ void delblank(char str[]) {
         }
     }
 }
+
+char * convert(char *str) {
+    for(char *i = str; *i != '\0'; ++i) {
+        if(*i >= 'A' && i <= 'Z')  {
+            *i += 'a' - 'A';
+        }
+    }
+    return str;
+}
+            
+    

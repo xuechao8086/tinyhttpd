@@ -19,7 +19,7 @@ def update(key):
     cnt[key] += 1
 
 map(update, content)
-
+#map(lambda key: global cnt; cnt[key] +=1, content)
 print(filter(lambda key: cnt[key]>1, cnt))
 
 if __name__ == '__main__':
