@@ -5,6 +5,7 @@ uint32_t reverse_bits_32(uint32_t val);
 uint64_t reverse_bits_64(uint64_t val);
 unsigned int reverse_bits(unsigned int val);
 bool set_bit(int bit_array[], unsigned bit_num);
+int substr(char dst[], char src[], int start, int len);
 
 int main(int argc, char *argv[]) {
     unsigned int i =2; 
@@ -28,7 +29,12 @@ int main(int argc, char *argv[]) {
         std::cout<<"bit_array["<<i<<"]="<<bit_array[i]<<" ";
     }
     std::cout<<std::endl;
-
+    
+    char src[] = {"xuechao zhao"};
+    char dst[1024];
+    
+    substr(dst, src, 0, 6);
+    std::cout<<"dst = "<<dst<<std::endl;
     return 0;
 }
 
@@ -75,6 +81,28 @@ bool set_bit(int bit_array[], unsigned bit_num) {
     bit_array[pos_one] |= 1<<pos_two;
 
     return true;
+}
+
+int substr(char dst[], char src[], int start, int len) {
+    if(src==NULL || start < 0 || len < 0) {
+        *dst = '\0';
+        return 0;
+    }
+    
+    int srclen = strlen(src);
+
+    if (start > srclen) {
+        *dst = '\0';
+        return 0;
+    }
+    
+    for(int i = start, j = 0; i <= start + len; ++i, ++j) {
+        if(*(src+i)) {
+            *(dst + j) = *(src + i);
+        } else {
+            *(dst + j) = '\0';
+        }
+    }
 }
 
 
