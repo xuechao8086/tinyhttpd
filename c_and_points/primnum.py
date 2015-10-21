@@ -18,5 +18,11 @@ def get_prime_num(limit):
     
     return [ i for i in xrange(1, limit) if array[i]]
 
+
+
+#consider how to use map
+
+
+
 if __name__ == '__main__':
     print(get_prime_num(1024))
