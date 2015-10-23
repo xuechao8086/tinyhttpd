@@ -6,6 +6,8 @@
 
 #include <iostream>
 #include <string>
+#include <stack>
+
 
 typedef struct list_head {
     struct list_head *next, *prev;
