@@ -8,6 +8,12 @@ int print_out(int total, int same);
 int calc_birthday(int num, int (*callback)(int total, int same));
 
 int main(int argc, char *argv[])  {
+    char bf[1024];
+    sprintf(bf, "%d %s %d", 100, "xuechao", 50);
+    std::cout<<"bf = "<<bf<<std::endl;
+
+
+
     for(int i = 50; i < 256; ++i) {
         calc_birthday(i, print_out);
     }
