@@ -6,6 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <float.h>
+#include <pthread.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>

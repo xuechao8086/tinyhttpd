@@ -6,3 +6,5 @@
 	g++ 6.cc -O0 -std=c++11 -Wall -ggdb -o 6
 9:
 	g++ 9.cc -O0 -std=c++11 -Wall -ggdb -o 9
+grep:
+	g++ grep.cc -O0 -std=c++11 -Wall -ggdb -o grep -lpthread
