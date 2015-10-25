@@ -42,10 +42,6 @@ GrepProcessor::GrepProcessor(const char *ptn, const char **fns, int cnt) {
 }
 
 int GrepProcessor::processor(const char *filename, const char *pattern) {
-    char buffer[4096];
-    
-    bool mark = false;
-    char errorinfo[1024] = "";
     //std::cout<<"$:filename:"<<filename<<", pattern:"<<pattern<<std::endl;
     
     struct stat s_st;
@@ -64,6 +60,7 @@ int GrepProcessor::processor(const char *filename, const char *pattern) {
 
     FILE *fp = fopen(filename, "r");
     char *lineptr = (char *)malloc(sizeof(char)*10240);
+    
     memset(lineptr, '\0', 10240);
 
     size_t len;
@@ -75,7 +72,6 @@ int GrepProcessor::processor(const char *filename, const char *pattern) {
             std::cout<<" \033[31m\033[1m";
             std::cout<<lineptr;
             std::cout<<"\033[0m";
-            mark = true;
         }
      }
 
@@ -83,6 +79,7 @@ int GrepProcessor::processor(const char *filename, const char *pattern) {
     free(lineptr);
     return 0;
 }
+
 int GrepProcessor::multi_processor() {
     std::vector<pthread_t> ids; 
     

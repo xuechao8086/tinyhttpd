@@ -16,6 +16,8 @@
 #include <string>
 #include <stack>
 #include <vector>
+#include <mutex>
+#include <queue>
 
 typedef struct list_head {
     struct list_head *next, *prev;
