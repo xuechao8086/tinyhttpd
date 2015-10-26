@@ -1,3 +1,5 @@
+#ifndef HEAD_H
+#define HEAD_H
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,3 +26,5 @@ typedef struct list_head {
 } list_head;
 
 #define LIST_HEAD_INIT(name) {&(name), &(name)}
+
+#endif
