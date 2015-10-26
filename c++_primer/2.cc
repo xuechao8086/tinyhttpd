@@ -15,6 +15,7 @@ int main(int argc, char *argv[]) {
 }
 
 void bitwidth() {
+    std::cout<<"sizeof(bool) = "<<sizeof(bool)<<std::endl;
     int i = 0;
     std::cout<<"sizeof(int)="<<sizeof(i)<<std::endl;
     long int j = 0;
