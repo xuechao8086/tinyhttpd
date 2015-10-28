@@ -20,6 +20,9 @@
 #include <vector>
 #include <mutex>
 #include <queue>
+#include <thread>
+#include <condition_variable>
+#include <functional>
 
 typedef struct list_head {
     struct list_head *next, *prev;
