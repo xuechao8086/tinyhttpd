@@ -1,14 +1,88 @@
 /*
  * batch commands tools.
  * by charliezhao
+ *
+ * memo:
+ *      local fd do not use select, find no use.
  * todo:
- *  add epoll support
- *  add select support
+ *      network support.
  */
 #include "head.h"
 #define BUFLEN 1024
+const bool debug = true;
 
 void usage(const char *name);
+
+class TcpServer {
+    public:
+        TcpServer(uint32_t port);
+        
+        void run(void); 
+
+        ~TcpServer();
+
+    private:
+        int domain_;
+        int type_;
+        int protocol_ = 0;
+        uint32_t port_;
+         
+        int sfd_ = 0;
+};
+
+void TcpServer::run(void) {
+    if((sfd_ = socket(domain_, type_, 0)) == -1) {
+        perror("create socket fail");
+    }
+
+    struct sockaddr_in my_addr;
+    memset(&my_addr, 0, sizeof(my_addr));
+    my_addr.sin_family = AF_INET;
+    my_addr.sin_addr.s_addr = INADDR_ANY;
+    my_addr.sin_port=htons(port_);
+    
+    bool re_use_addr = true;
+    setsockopt(sfd_, SOL_SOCKET, SO_REUSEADDR, (const void *)&re_use_addr, sizeof(re_use_addr));
+
+    if(bind(sfd_, (const sockaddr *)&my_addr, sizeof(my_addr)) < 0)  {
+        perror("bind fail");
+    }
+
+    listen(sfd_, 5);
+
+    struct sockaddr_in remote_addr;    
+    socklen_t addrlen = sizeof(sockaddr_in);
+    int client_sockfd;
+    while(true) { 
+        if((client_sockfd = accept(sfd_, (sockaddr *)&remote_addr, &addrlen)) == -1) {
+            perror("accept fail");
+
+        }
+
+        std::cout<<"accept from "<<inet_ntoa(remote_addr.sin_addr)<<std::endl;
+
+        char buf[BUFLEN] = "hello from charliezhao\n";
+        send(client_sockfd, buf, sizeof(buf), 0);
+
+        memset(buf, '\0', sizeof(buf));
+        recv(client_sockfd, buf, BUFLEN, 0);
+        std::cout<<buf<<std::endl; 
+        close(client_sockfd);
+    }
+}
+
+TcpServer::TcpServer(uint32_t port) {
+    port_ = port;
+
+    domain_ = AF_INET;
+    type_ = SOCK_STREAM;
+    
+}
+
+TcpServer::~TcpServer() {
+    close(sfd_);
+}
+
 class Command {
     public:
         Command(const char *command):command(command) {}
@@ -62,13 +136,15 @@ int BatchCommand::select_run(void) {
         fds.push_back(fp->_fileno);
         ++nfds;
     }
-    
-    for(auto fd : fds) {
-        std::cout<<"fd:"<<fd<<", set:"<<FD_ISSET(fd, &rfds)<<std::endl;
+
+    if(debug) { 
+        for(auto fd : fds) {
+            std::cout<<"fd:"<<fd<<", set:"<<FD_ISSET(fd, &rfds)<<std::endl;
+        }
+
+        std::cout<<"fd:"<<10<<", set:"<<FD_ISSET(10, &rfds)<<std::endl;
     }
-     
-    std::cout<<"fd:"<<10<<", set:"<<FD_ISSET(10, &rfds)<<std::endl;
-    
+
     struct timeval timeout;
     timeout.tv_sec = 0;
     timeout.tv_usec = 10;
@@ -194,6 +270,10 @@ void Command::run(void) {
 }
 
 int main(int argc, char *argv[]) {
+    TcpServer s(9999);
+    s.run();
+
+
     if(argc == 1) {
         usage(argv[0]);
     }

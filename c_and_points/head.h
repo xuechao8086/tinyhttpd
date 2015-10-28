@@ -1,5 +1,6 @@
 #ifndef HEAD_H
 #define HEAD_H
+//for c lib
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,7 @@
 #include <float.h>
 #include <pthread.h>
 
+//for linux env 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/epoll.h>
@@ -17,6 +19,14 @@
 #include <sys/time.h>
 #include <fcntl.h>
 
+//for socket
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+//for c++ lib
 #include <iostream>
 #include <string>
 #include <stack>
