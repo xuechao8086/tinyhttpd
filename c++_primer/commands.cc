@@ -1,6 +1,9 @@
 /*
- * add multi thread support
+ * batch commands tools.
  * by charliezhao
+ * todo:
+ *  add epoll support
+ *  add select support
  */
 #include "head.h"
 #define BUFLEN 1024
@@ -30,13 +33,104 @@ class BatchCommand {
         }
         
         ~BatchCommand() {}
-        int run(void);
-    
+        int run(void); // use multi thread.
+        int epoll_run(void); // use epoll.
+        int select_run(void); // use select.
+        void test(void);
+
     private:
         int _run(void);
         std::stack<const char *> cmds;
         std::mutex mutex_;
 };
+
+int BatchCommand::epoll_run(void) {
+     
+    return 0;
+}
+
+int BatchCommand::select_run(void) {
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    int nfds = 0; 
+    std::vector<int> fds;
+    while(!cmds.empty()) {
+        const char *cmd = cmds.top();
+        FILE *fp = popen(cmd, "r");
+        cmds.pop(); 
+        FD_SET(fp->_fileno, &rfds);
+        fds.push_back(fp->_fileno);
+        ++nfds;
+    }
+    
+    for(auto fd : fds) {
+        std::cout<<"fd:"<<fd<<", set:"<<FD_ISSET(fd, &rfds)<<std::endl;
+    }
+     
+    std::cout<<"fd:"<<10<<", set:"<<FD_ISSET(10, &rfds)<<std::endl;
+    
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 10;
+
+    // select have no effect, why?
+    int retval = select(nfds, &rfds, NULL, NULL, &timeout);
+    
+    if(retval == -1) {
+        perror("select fail");
+        return retval;
+    }
+
+    std::cout<<"select retval "<<retval<<std::endl;
+
+    char buf[1025] = "\0";
+    int ret = 0; 
+    for(auto fd : fds) {
+        //if(FD_ISSET(fd, &rfds)) {
+        if(true) {
+            int offset = 0;
+            while(true) {
+                ret = read(fd, buf, 1024);
+                if(ret == 0) {
+                    break;
+                }
+                if(ret == -1) {
+                    break;
+                }
+                buf[ret] = '\0';
+                std::cout<<buf;
+                offset += 1024;
+                lseek(fd, offset, SEEK_SET);
+            }
+        }
+    }
+    return 0;
+}
+
+void BatchCommand::test(void) {
+    FILE *fp = fopen("./pregnancytime.cc", "r");
+    int fd = fp->_fileno;
+    //int fd = open("./pregnancytime.cc", 0, O_RDONLY); 
+    int ret = 0;
+    char buf[1024] = "\0";
+    int offset = 0;
+    while(true) {
+        ret = read(fd, buf, 1024);
+        if(ret == 0) {
+            break;
+        }
+        else if(ret == -1) {
+            break; 
+        }
+        offset += 1024;
+        lseek(fd, offset, SEEK_SET);
+        buf[ret] = '\0'; 
+        std::cout<<buf;
+    }
+    fclose(fp);
+    std::cout<<std::endl;
+}
+
 
 int  BatchCommand::run(void) {
     int32_t len = cmds.size();
@@ -111,7 +205,10 @@ int main(int argc, char *argv[]) {
     */
 
     BatchCommand bc(argc, argv);
-    bc.run(); 
+    bc.select_run(); 
+    //bc.test();
+    //bc.run();
+     
     return 0;
 }
 
