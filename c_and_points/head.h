@@ -26,6 +26,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+//for TCP_NODELAY
+#include <netinet/tcp.h> 
+
 //for c++ lib
 #include <iostream>
 #include <string>

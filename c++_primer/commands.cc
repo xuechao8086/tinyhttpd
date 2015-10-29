@@ -2,10 +2,6 @@
  * batch commands tools.
  * by charliezhao
  *
- * memo:
- *      local fd do not use select, find no use.
- * todo:
- *      network support.
  */
 #include "head.h"
 #define BUFLEN 1024
@@ -19,7 +15,7 @@ class TcpServer {
     public:
         TcpServer(uint32_t port);
         ~TcpServer();
-        
+
         int run(void); 
 
     private:
@@ -27,7 +23,7 @@ class TcpServer {
         int type_;
         int protocol_ = 0;
         uint32_t port_;
-         
+
         int sfd_ = 0;
 };
 
@@ -41,7 +37,7 @@ int  TcpServer::run(void) {
     my_addr.sin_family = AF_INET;
     my_addr.sin_addr.s_addr = INADDR_ANY;
     my_addr.sin_port=htons(port_);
-    
+
     bool re_use_addr = true;
     setsockopt(sfd_, SOL_SOCKET, SO_REUSEADDR, (const void *)&re_use_addr, sizeof(re_use_addr));
 
@@ -57,7 +53,7 @@ int  TcpServer::run(void) {
         perror("epoll create fail");
         return -1;
     }
-    
+
     struct epoll_event ev, events[MAX_EVENTS];
     ev.events = EPOLLIN;
     ev.data.fd = sfd_;
@@ -65,61 +61,129 @@ int  TcpServer::run(void) {
         perror("epoll_ctl fail");
         return -1;
     }
-    
+
     int nfds = 0;
     int cfd = 0;
     struct sockaddr_in remote_addr;    
     socklen_t addrlen = sizeof(sockaddr_in);
-    const char *hello = "hello from charliezhao"; 
+    const char *hello = "hello from charliezhao's commands tools\n"; 
+    size_t hello_len = strlen(hello)+1;
     char buf[BUFLEN] = "\0"; 
-    
+
+    int ret;
     while(true) {
-       nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
-       if(nfds == -1) {
-           perror("epoll_wait fail");
-           return -1;
-       }
-       for(int n = 0; n < nfds;  ++n) {
-           if(events[n].data.fd == sfd_) {
-               if((cfd = accept(sfd_, (sockaddr *)&remote_addr, &addrlen)) == -1) {
-                   perror("accept fail");
-                   continue;
-               }
-               fcntl(cfd,F_SETFL,O_NONBLOCK);
-               ev.events = EPOLLIN | EPOLLET; 
-               ev.data.fd = cfd; 
-               if(epoll_ctl(epollfd, EPOLL_CTL_ADD, cfd, &ev) == -1) {
-                   perror("epoll_ctl fail");
-                   continue;
-               }
-           }
-           else {
-               //more work need to do.
-               recv(events[n].data.fd, buf, BUFLEN, 0);
-               std::cout<<buf;
-           }
-       }
-    }
-    
-    /*
-    int client_sockfd;
-    while(true) { 
-        if((client_sockfd = accept(sfd_, (sockaddr *)&remote_addr, &addrlen)) == -1) {
-            perror("accept fail");
-
+        nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+        if(nfds == -1) {
+            perror("epoll_wait fail");
+            return -1;
         }
+        for(int n = 0; n < nfds;  ++n) {
+            if(events[n].data.fd == sfd_) {
+                if((cfd = accept(sfd_, (sockaddr *)&remote_addr, &addrlen)) == -1) {
+                    perror("accept fail");
+                    continue;
+                }
 
-        std::cout<<"accept from "<<inet_ntoa(remote_addr.sin_addr)<<std::endl;
+                char *ip = inet_ntoa(remote_addr.sin_addr);
+                std::cout<<"connected from "<<ip<<std::endl;
 
-        char buf[BUFLEN] = "hello from charliezhao\n";
-        send(client_sockfd, buf, sizeof(buf), 0);
+                if((ret = send(cfd, hello, hello_len, MSG_DONTWAIT)) == -1) {
+                    perror("send fail");
+                    continue;
+                }
 
-        memset(buf, '\0', sizeof(buf));
-        recv(client_sockfd, buf, BUFLEN, 0);
-        std::cout<<buf<<std::endl; 
-        close(client_sockfd);
+                fcntl(cfd,F_SETFL,O_NONBLOCK);
+
+                bool on = false;
+                setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, (const void *)&on, sizeof(on));
+
+                // ev.events = EPOLLIN | EPOLLET ; 
+                ev.events = EPOLLIN; 
+                ev.data.fd = cfd; 
+                if(epoll_ctl(epollfd, EPOLL_CTL_ADD, cfd, &ev) == -1) {
+                    perror("epoll_ctl fail");
+                    continue;
+                }
+            }
+            
+            //in test, never appear EPOLLHUP stat, why?
+            else if(events[n].events & EPOLLHUP) {
+                std::cout<<"EPOLLHUP"<<std::endl;
+                std::cout<<events[n].data.fd<<" closed";
+                ev.events = EPOLLHUP;
+                ev.data.fd = events[n].data.fd;
+                if(epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev) == -1) {
+                    perror("epoll_ctl fail");
+                }
+                close(events[n].data.fd);
+            }
+
+            else if(events[n].events & EPOLLIN) {
+                std::cout<<"EPOLLIN"<<std::endl;
+                memset(buf, 0, BUFLEN);
+                ssize_t len = recv(events[n].data.fd, buf, BUFLEN, 0);
+                if (len <= 0) {
+                    ev.events = EPOLLHUP;
+                    ev.data.fd = events[n].data.fd;
+                    if(epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev) == -1) {
+                        perror("epoll_ctl fail");
+                    }
+                    close(events[n].data.fd);
+                }
+                else {
+                    std::cout<<buf;
+                    ev.events = EPOLLOUT | EPOLLHUP;
+                    ev.data.fd = cfd;
+                    if(epoll_ctl(epollfd, EPOLL_CTL_MOD, ev.data.fd, &ev) == -1) {
+                        perror("epoll_ctl fail");
+                        continue; 
+                    }
+                }
+            }
+            else if(events[n].events & EPOLLOUT) {
+                std::cout<<"EPOLLOUT"<<std::endl;
+                
+                // for test
+                // ev.events = EPOLLIN | EPOLLHUP;
+                // ev.data.fd = events[n].data.fd;
+                // if(epoll_ctl(epollfd, EPOLL_CTL_MOD, ev.data.fd, &ev) == -1) {
+                //    perror("epoll_ctl fail");
+                // }
+                // continue;
+                // end of test
+
+                char buf[0];
+                int ret = send(events[n].data.fd, buf, 0, 0);
+                if(ret != 0) {
+                    std::cout<<"send fail"<<std::endl;
+                    ev.events = EPOLLHUP;
+                    ev.data.fd = events[n].data.fd;
+                    if(epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev) == -1) {
+                        perror("epoll_ctl fail");
+                    }
+                    close(events[n].data.fd);                    
+                }
+                else {
+                    ev.events = EPOLLIN | EPOLLHUP;
+                    ev.data.fd = events[n].data.fd;
+                    if(epoll_ctl(epollfd, EPOLL_CTL_MOD, events[n].data.fd, &ev) == -1) {
+                        perror("epoll_ctl fail");
+                    }
+                }
+
+            }
+            else if(events[n].events & EPOLLPRI) {
+                memset(buf, 0, BUFLEN);
+                recv(events[n].data.fd, buf, BUFLEN, 0);
+                std::cout<<buf;
+            }
+
+            else {
+                //more work need to do.
+                std::cout<<"more work need to do"<<std::endl;  
+            }
+        }
     }
-    */
 }
 
 TcpServer::TcpServer(uint32_t port) {
@@ -127,7 +191,7 @@ TcpServer::TcpServer(uint32_t port) {
 
     domain_ = AF_INET;
     type_ = SOCK_STREAM;
-    
+
 }
 
 TcpServer::~TcpServer() {
@@ -156,7 +220,7 @@ class BatchCommand {
                 cmds.push(*(commands+i));
             }
         }
-        
+
         ~BatchCommand() {}
         int run(void); // use multi thread.
         int epoll_run(void); // use epoll.
@@ -170,7 +234,7 @@ class BatchCommand {
 };
 
 int BatchCommand::epoll_run(void) {
-     
+
     return 0;
 }
 
@@ -202,7 +266,7 @@ int BatchCommand::select_run(void) {
 
     // select have no effect, why?
     int retval = select(nfds, &rfds, NULL, NULL, &timeout);
-    
+
     if(retval == -1) {
         perror("select fail");
         return retval;
@@ -232,119 +296,119 @@ int BatchCommand::select_run(void) {
         }
     }
     return 0;
-}
+    }
 
-void BatchCommand::test(void) {
-    FILE *fp = fopen("./pregnancytime.cc", "r");
-    int fd = fp->_fileno;
-    //int fd = open("./pregnancytime.cc", 0, O_RDONLY); 
-    int ret = 0;
-    char buf[1024] = "\0";
-    int offset = 0;
-    while(true) {
-        ret = read(fd, buf, 1024);
-        if(ret == 0) {
-            break;
+    void BatchCommand::test(void) {
+        FILE *fp = fopen("./pregnancytime.cc", "r");
+        int fd = fp->_fileno;
+        //int fd = open("./pregnancytime.cc", 0, O_RDONLY); 
+        int ret = 0;
+        char buf[1024] = "\0";
+        int offset = 0;
+        while(true) {
+            ret = read(fd, buf, 1024);
+            if(ret == 0) {
+                break;
+            }
+            else if(ret == -1) {
+                break; 
+            }
+            offset += 1024;
+            lseek(fd, offset, SEEK_SET);
+            buf[ret] = '\0'; 
+            std::cout<<buf;
         }
-        else if(ret == -1) {
-            break; 
+        fclose(fp);
+        std::cout<<std::endl;
+    }
+
+
+    int  BatchCommand::run(void) {
+        int32_t len = cmds.size();
+        int8_t thread_cnt;
+
+        if(len<10) {
+            thread_cnt = 1;
+        } 
+        else if(len<100) {
+            thread_cnt = 2;
         }
-        offset += 1024;
-        lseek(fd, offset, SEEK_SET);
-        buf[ret] = '\0'; 
-        std::cout<<buf;
-    }
-    fclose(fp);
-    std::cout<<std::endl;
-}
-
-
-int  BatchCommand::run(void) {
-    int32_t len = cmds.size();
-    int8_t thread_cnt;
-
-    if(len<10) {
-        thread_cnt = 1;
-    } 
-    else if(len<100) {
-        thread_cnt = 2;
-    }
-    else if(len<1000) {
-        thread_cnt = 3;
-    }
-    else {
-        thread_cnt = 4;
-    }
-    
-    std::thread *arr[thread_cnt];
-    for(int8_t i = 0; i <= thread_cnt; ++i) {
-        arr[i] = new std::thread(std::bind(&BatchCommand::_run, this));
-    }
-    
-    for(int8_t i = 0; i <= thread_cnt; ++i) {
-        arr[i]->join();
-        delete arr[i];
-    }
-    
-    return 0;
-}
-
-int BatchCommand::_run(void) {
-    while(true) {
-        mutex_.lock();
-        if(!cmds.empty()) {
-            const char *cmd = cmds.top();
-            cmds.pop();
-            mutex_.unlock();
-            Command c(cmd);
-            c.run();
+        else if(len<1000) {
+            thread_cnt = 3;
         }
         else {
-            mutex_.unlock();
-            break;
+            thread_cnt = 4;
         }
+
+        std::thread *arr[thread_cnt];
+        for(int8_t i = 0; i <= thread_cnt; ++i) {
+            arr[i] = new std::thread(std::bind(&BatchCommand::_run, this));
+        }
+
+        for(int8_t i = 0; i <= thread_cnt; ++i) {
+            arr[i]->join();
+            delete arr[i];
+        }
+
+        return 0;
     }
-    return 0;
-}
 
-void Command::run(void) {
-    const char *sleep = "sleep 10s; ";
-    std::string c(sleep);
-    c += command;
-    std::cout<<c<<std::endl;
-    fp = popen(c.c_str(), mode);
-    char buf[len];
-    while(fread(buf, sizeof(char), len, fp)) {
-        std::cout<<buf;
+    int BatchCommand::_run(void) {
+        while(true) {
+            mutex_.lock();
+            if(!cmds.empty()) {
+                const char *cmd = cmds.top();
+                cmds.pop();
+                mutex_.unlock();
+                Command c(cmd);
+                c.run();
+            }
+            else {
+                mutex_.unlock();
+                break;
+            }
+        }
+        return 0;
     }
-    std::cout<<std::endl;
-}
 
-int main(int argc, char *argv[]) {
-    TcpServer s(9999);
-    s.run();
-
-
-    if(argc == 1) {
-        usage(argv[0]);
+    void Command::run(void) {
+        const char *sleep = "sleep 10s; ";
+        std::string c(sleep);
+        c += command;
+        std::cout<<c<<std::endl;
+        fp = popen(c.c_str(), mode);
+        char buf[len];
+        while(fread(buf, sizeof(char), len, fp)) {
+            std::cout<<buf;
+        }
+        std::cout<<std::endl;
     }
-    /*
-    for(int i = 1; i < argc; ++i) {
-        Command cm(argv[i]);
-        cm.run();
+
+    int main(int argc, char *argv[]) {
+        TcpServer s(9999);
+        s.run();
+
+
+        if(argc == 1) {
+            usage(argv[0]);
+        }
+        /*
+           for(int i = 1; i < argc; ++i) {
+           Command cm(argv[i]);
+           cm.run();
+           }
+           */
+
+        BatchCommand bc(argc, argv);
+        bc.select_run(); 
+        //bc.test();
+        //bc.run();
+
+        return 0;
     }
-    */
 
-    BatchCommand bc(argc, argv);
-    bc.select_run(); 
-    //bc.test();
-    //bc.run();
-     
-    return 0;
-}
-
-void usage(const char *name) {
-    std::cout<<name<<" [command1[command2[...]]]"<<std::endl;
-    exit(0);
-}
+    void usage(const char *name) {
+        std::cout<<name<<" [command1[command2[...]]]"<<std::endl;
+        exit(0);
+    }
 
