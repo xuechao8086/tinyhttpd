@@ -9,6 +9,8 @@
  */
 #include "head.h"
 #define BUFLEN 1024
+#define MAX_EVENTS 1024
+
 const bool debug = true;
 
 void usage(const char *name);
@@ -16,10 +18,9 @@ void usage(const char *name);
 class TcpServer {
     public:
         TcpServer(uint32_t port);
-        
-        void run(void); 
-
         ~TcpServer();
+        
+        int run(void); 
 
     private:
         int domain_;
@@ -30,7 +31,7 @@ class TcpServer {
         int sfd_ = 0;
 };
 
-void TcpServer::run(void) {
+int  TcpServer::run(void) {
     if((sfd_ = socket(domain_, type_, 0)) == -1) {
         perror("create socket fail");
     }
@@ -50,8 +51,57 @@ void TcpServer::run(void) {
 
     listen(sfd_, 5);
 
+    //setup epoll
+    int epollfd = epoll_create(10);
+    if(epollfd == -1) {
+        perror("epoll create fail");
+        return -1;
+    }
+    
+    struct epoll_event ev, events[MAX_EVENTS];
+    ev.events = EPOLLIN;
+    ev.data.fd = sfd_;
+    if(epoll_ctl(epollfd, EPOLL_CTL_ADD, sfd_, &ev) == -1) {
+        perror("epoll_ctl fail");
+        return -1;
+    }
+    
+    int nfds = 0;
+    int cfd = 0;
     struct sockaddr_in remote_addr;    
     socklen_t addrlen = sizeof(sockaddr_in);
+    const char *hello = "hello from charliezhao"; 
+    char buf[BUFLEN] = "\0"; 
+    
+    while(true) {
+       nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+       if(nfds == -1) {
+           perror("epoll_wait fail");
+           return -1;
+       }
+       for(int n = 0; n < nfds;  ++n) {
+           if(events[n].data.fd == sfd_) {
+               if((cfd = accept(sfd_, (sockaddr *)&remote_addr, &addrlen)) == -1) {
+                   perror("accept fail");
+                   continue;
+               }
+               fcntl(cfd,F_SETFL,O_NONBLOCK);
+               ev.events = EPOLLIN | EPOLLET; 
+               ev.data.fd = cfd; 
+               if(epoll_ctl(epollfd, EPOLL_CTL_ADD, cfd, &ev) == -1) {
+                   perror("epoll_ctl fail");
+                   continue;
+               }
+           }
+           else {
+               //more work need to do.
+               recv(events[n].data.fd, buf, BUFLEN, 0);
+               std::cout<<buf;
+           }
+       }
+    }
+    
+    /*
     int client_sockfd;
     while(true) { 
         if((client_sockfd = accept(sfd_, (sockaddr *)&remote_addr, &addrlen)) == -1) {
@@ -69,6 +119,7 @@ void TcpServer::run(void) {
         std::cout<<buf<<std::endl; 
         close(client_sockfd);
     }
+    */
 }
 
 TcpServer::TcpServer(uint32_t port) {
