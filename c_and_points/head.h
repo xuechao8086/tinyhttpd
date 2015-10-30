@@ -1,6 +1,6 @@
 #ifndef HEAD_H
 #define HEAD_H
-//for c lib
+// for c lib
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,25 +11,26 @@
 #include <float.h>
 #include <pthread.h>
 
-//for linux env 
+// for linux env 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/epoll.h>
 #include <sys/select.h>
 #include <sys/time.h>
 #include <fcntl.h>
+#include <signal.h>
 
-//for socket
+// for socket
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-//for TCP_NODELAY
+// for TCP_NODELAY
 #include <netinet/tcp.h> 
 
-//for c++ lib
+// for c++ lib
 #include <iostream>
 #include <string>
 #include <stack>
@@ -39,6 +40,8 @@
 #include <thread>
 #include <condition_variable>
 #include <functional>
+
+#define MAXFD 64
 
 typedef struct list_head {
     struct list_head *next, *prev;
@@ -52,4 +55,10 @@ struct s_args {
     uint32_t k;
     uint32_t m;
 };
+
+
+namespace util {
+    int daemon(const char *pname, int facility);
+};
+
 #endif
