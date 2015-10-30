@@ -16,7 +16,11 @@ commands: commands.o daemon.o
 agent: agent.o daemon.o
 	g++  agent.o daemon.o -o agent
 
+udpcli: udpcli.o daemon.o
+	g++ udpcli.o daemon.o -o udpcli
 
+udpcli.o: udpcli.cc
+	${CC} -c $< ${FlagsOne} -o $@
 
 agent.o: agent.cc
 	${CC} -c $< ${FlagsOne} -o $@
@@ -30,3 +34,4 @@ commands.o: commands.cc
 clean:
 	rm -rf *.o
 	rm -rf commands agent
+

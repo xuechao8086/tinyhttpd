@@ -58,7 +58,9 @@ struct s_args {
 
 
 namespace util {
-    int daemon(const char *pname, int facility);
+    //int daemon(const char *pname, int facility);
+    int daemon();
+    void sig_chld(int signo);
 };
 
 #endif

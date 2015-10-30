@@ -1,7 +1,8 @@
 /*
  * batch commands tools.
  * by charliezhao
- *
+ * todo:
+ *  timeout
  */
 #include "head.h"
 #define BUFLEN 1024
@@ -16,7 +17,7 @@ class TcpServer {
         TcpServer(uint32_t port);
         ~TcpServer();
 
-        int run(void); 
+        int epollrun(void); 
 
     private:
         int domain_;
@@ -27,7 +28,8 @@ class TcpServer {
         int sfd_ = 0;
 };
 
-int  TcpServer::run(void) {
+int  TcpServer::epollrun(void) {
+    int ret;
     if((sfd_ = socket(domain_, type_, 0)) == -1) {
         perror("create socket fail");
     }
@@ -37,6 +39,17 @@ int  TcpServer::run(void) {
     my_addr.sin_family = AF_INET;
     my_addr.sin_addr.s_addr = INADDR_ANY;
     my_addr.sin_port=htons(port_);
+    
+    // set no block. 
+    int flags = fcntl(sfd_, F_GETFL, 0);
+    if(flags == -1) {
+        perror("fcntl get fail");
+    }
+    ret = fcntl(sfd_, F_SETFL, flags|O_NONBLOCK);
+    if(ret == -1) {
+        perror("fcntl set fail");
+    }
+
 
     bool re_use_addr = true;
     setsockopt(sfd_, SOL_SOCKET, SO_REUSEADDR, (const void *)&re_use_addr, sizeof(re_use_addr));
@@ -70,7 +83,6 @@ int  TcpServer::run(void) {
     size_t hello_len = strlen(hello)+1;
     char buf[BUFLEN] = "\0"; 
 
-    int ret;
     while(true) {
         nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
         if(nfds == -1) {
@@ -95,7 +107,37 @@ int  TcpServer::run(void) {
                 fcntl(cfd,F_SETFL,O_NONBLOCK);
 
                 bool on = false;
-                setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, (const void *)&on, sizeof(on));
+                // no nagle
+                if((ret = setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, (const void *)&on, sizeof(on))) == -1) 
+                {
+                    perror("setsockopt fail");
+                }
+                
+                // keep alive 
+                bool keepalive = true;
+                if((ret = setsockopt(cfd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&keepalive, sizeof(keepalive))) == -1) {
+                    perror("setsockopt fail");
+                }
+                
+                // set tos
+                int tostype = 0xcc;
+                if((ret = setsockopt(cfd, IPPROTO_IP, IP_TOS, (const void *)&tostype, sizeof(tostype))) == -1) {
+                    perror("setsockopt tos type fail");
+                }
+                
+                // set ttl, has no effect, why?
+                int ttl = 0x20;
+                if((ret = setsockopt(cfd, IPPROTO_TCP, IP_TTL, (const void *)&ttl, sizeof(tostype))) == -1) {
+                    perror("setsockopt ttl fail");
+                }
+                
+                // set recv timeout
+                struct timeval tv;
+                tv.tv_sec = 5;
+                tv.tv_usec = 0;
+                if((ret = setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) == -1) {
+                    perror("setsockopt recv timeout fail");
+                }
 
                 // ev.events = EPOLLIN | EPOLLET ; 
                 ev.events = EPOLLIN; 
@@ -306,117 +348,117 @@ int BatchCommand::select_run(void) {
     return 0;
     }
 
-    void BatchCommand::test(void) {
-        FILE *fp = fopen("./pregnancytime.cc", "r");
-        int fd = fp->_fileno;
-        //int fd = open("./pregnancytime.cc", 0, O_RDONLY); 
-        int ret = 0;
-        char buf[1024] = "\0";
-        int offset = 0;
-        while(true) {
-            ret = read(fd, buf, 1024);
-            if(ret == 0) {
-                break;
-            }
-            else if(ret == -1) {
-                break; 
-            }
-            offset += 1024;
-            lseek(fd, offset, SEEK_SET);
-            buf[ret] = '\0'; 
-            std::cout<<buf;
+void BatchCommand::test(void) {
+    FILE *fp = fopen("./pregnancytime.cc", "r");
+    int fd = fp->_fileno;
+    //int fd = open("./pregnancytime.cc", 0, O_RDONLY); 
+    int ret = 0;
+    char buf[1024] = "\0";
+    int offset = 0;
+    while(true) {
+        ret = read(fd, buf, 1024);
+        if(ret == 0) {
+            break;
         }
-        fclose(fp);
-        std::cout<<std::endl;
+        else if(ret == -1) {
+            break; 
+        }
+        offset += 1024;
+        lseek(fd, offset, SEEK_SET);
+        buf[ret] = '\0'; 
+        std::cout<<buf;
+    }
+    fclose(fp);
+    std::cout<<std::endl;
+}
+
+
+int  BatchCommand::run(void) {
+    int32_t len = cmds.size();
+    int8_t thread_cnt;
+
+    if(len<10) {
+        thread_cnt = 1;
+    } 
+    else if(len<100) {
+        thread_cnt = 2;
+    }
+    else if(len<1000) {
+        thread_cnt = 3;
+    }
+    else {
+        thread_cnt = 4;
     }
 
+    std::thread *arr[thread_cnt];
+    for(int8_t i = 0; i <= thread_cnt; ++i) {
+        arr[i] = new std::thread(std::bind(&BatchCommand::_run, this));
+    }
 
-    int  BatchCommand::run(void) {
-        int32_t len = cmds.size();
-        int8_t thread_cnt;
+    for(int8_t i = 0; i <= thread_cnt; ++i) {
+        arr[i]->join();
+        delete arr[i];
+    }
 
-        if(len<10) {
-            thread_cnt = 1;
-        } 
-        else if(len<100) {
-            thread_cnt = 2;
-        }
-        else if(len<1000) {
-            thread_cnt = 3;
+    return 0;
+}
+
+int BatchCommand::_run(void) {
+    while(true) {
+        mutex_.lock();
+        if(!cmds.empty()) {
+            const char *cmd = cmds.top();
+            cmds.pop();
+            mutex_.unlock();
+            Command c(cmd);
+            c.run();
         }
         else {
-            thread_cnt = 4;
+            mutex_.unlock();
+            break;
         }
-
-        std::thread *arr[thread_cnt];
-        for(int8_t i = 0; i <= thread_cnt; ++i) {
-            arr[i] = new std::thread(std::bind(&BatchCommand::_run, this));
-        }
-
-        for(int8_t i = 0; i <= thread_cnt; ++i) {
-            arr[i]->join();
-            delete arr[i];
-        }
-
-        return 0;
     }
+    return 0;
+}
 
-    int BatchCommand::_run(void) {
-        while(true) {
-            mutex_.lock();
-            if(!cmds.empty()) {
-                const char *cmd = cmds.top();
-                cmds.pop();
-                mutex_.unlock();
-                Command c(cmd);
-                c.run();
-            }
-            else {
-                mutex_.unlock();
-                break;
-            }
-        }
-        return 0;
+void Command::run(void) {
+    const char *sleep = "sleep 10s; ";
+    std::string c(sleep);
+    c += command;
+    std::cout<<c<<std::endl;
+    fp = popen(c.c_str(), mode);
+    char buf[len];
+    while(fread(buf, sizeof(char), len, fp)) {
+        std::cout<<buf;
     }
+    std::cout<<std::endl;
+}
 
-    void Command::run(void) {
-        const char *sleep = "sleep 10s; ";
-        std::string c(sleep);
-        c += command;
-        std::cout<<c<<std::endl;
-        fp = popen(c.c_str(), mode);
-        char buf[len];
-        while(fread(buf, sizeof(char), len, fp)) {
-            std::cout<<buf;
-        }
-        std::cout<<std::endl;
+int main(int argc, char *argv[]) {
+    TcpServer s(9999);
+    s.epollrun();
+
+
+    if(argc == 1) {
+        usage(argv[0]);
     }
+    /*
+       for(int i = 1; i < argc; ++i) {
+       Command cm(argv[i]);
+       cm.run();
+       }
+       */
 
-    int main(int argc, char *argv[]) {
-        TcpServer s(9999);
-        s.run();
+    BatchCommand bc(argc, argv);
+    bc.select_run(); 
+    //bc.test();
+    //bc.run();
 
+    return 0;
+}
 
-        if(argc == 1) {
-            usage(argv[0]);
-        }
-        /*
-           for(int i = 1; i < argc; ++i) {
-           Command cm(argv[i]);
-           cm.run();
-           }
-           */
-
-        BatchCommand bc(argc, argv);
-        bc.select_run(); 
-        //bc.test();
-        //bc.run();
-
-        return 0;
-    }
-
-    void usage(const char *name) {
-        std::cout<<name<<" [command1[command2[...]]]"<<std::endl;
-        exit(0);
-    }
+void usage(const char *name) {
+    std::cout<<name<<" [command1[command2[...]]]"<<std::endl;
+    exit(0);
+}
 
