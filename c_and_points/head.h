@@ -46,4 +46,10 @@ typedef struct list_head {
 
 #define LIST_HEAD_INIT(name) {&(name), &(name)}
 
+struct s_args {
+    uint32_t i;
+    uint32_t j;
+    uint32_t k;
+    uint32_t m;
+};
 #endif

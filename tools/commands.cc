@@ -131,6 +131,14 @@ int  TcpServer::run(void) {
                     close(events[n].data.fd);
                 }
                 else {
+                    // for test struct
+                    struct s_args *p = (struct s_args *)buf;
+                    std::cout<<"p->i = "<<p->i<<std::endl;
+                    std::cout<<"p->j = "<<p->j<<std::endl;
+                    std::cout<<"p->k = "<<p->k<<std::endl;
+                    std::cout<<"p->m = "<<p->m<<std::endl;
+                    continue;
+
                     std::cout<<buf;
                     ev.events = EPOLLOUT | EPOLLHUP;
                     ev.data.fd = cfd;
