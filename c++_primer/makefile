@@ -1,6 +1,6 @@
 CC=g++
 FlagsOne=-Wall -O0 -std=c++11 -ggdb
-FlagsTwo=-Wl,--no-as-needed -lpthread
+FlagsTwo=-Wl,--no-as-needed -lpthread -lrt
 
 CPPFLAGS=${FlagsOne} ${FlagsTwo}
 all: commands, agent
@@ -12,7 +12,7 @@ all: commands, agent
 
 
 commands: commands.o daemon.o
-	g++ commands.o daemon.o -o commands
+	g++ commands.o daemon.o ${FlagsTwo} -o commands
 agent: agent.o daemon.o
 	g++  agent.o daemon.o -o agent
 

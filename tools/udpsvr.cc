@@ -40,9 +40,23 @@ void udpsvr_one() {
     fcntl(listenfd, F_SETFL, flags);
 
     bind(listenfd, (struct sockaddr *)&svr_addr, sizeof(svr_addr));
-
+    
+    sigset_t set;
+    int sig;
+    sigemptyset(&set);
+    sigaddset(&set, SIGIO);
+    //pthread_sigmask(SIG_BLOCK, &set, NULL);
+    
     while(true) {
-        sleep(1);
+        // method one, sleep
+        // sleep(1);
+
+        // method two, pause until signal
+        // pause();
+        //
+        //
+        
+        sigwait(&set, &sig);
     }
     close(listenfd);
 }

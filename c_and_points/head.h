@@ -9,7 +9,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <float.h>
-#include <pthread.h>
 
 // for linux env 
 #include <sys/types.h>
@@ -19,6 +18,11 @@
 #include <sys/time.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <errno.h>
+#include <pthread.h>
+
+// for posix aio
+#include <aio.h>
 
 // for socket
 #include <sys/socket.h>
@@ -40,6 +44,7 @@
 #include <thread>
 #include <condition_variable>
 #include <functional>
+#include <iomanip>
 
 #define MAXFD 64
 

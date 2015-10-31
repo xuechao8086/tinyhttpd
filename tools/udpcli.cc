@@ -1,7 +1,7 @@
 #include "head.h"
 
 int main(int argc, char *argv[]) {
-    util::daemon();
+    //util::daemon();
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(8888);
@@ -18,6 +18,6 @@ int main(int argc, char *argv[]) {
         send(fd, buf, sizeof(buf), 0);
         std::cout<<buf<<" send ok"<<std::endl;
         close(fd);
-        //sleep(1);
+        sleep(1);
     }
 }

@@ -4,35 +4,48 @@
  * todo:
  *  timeout
  */
-#include "head.h"
-#define BUFLEN 1024
-#define MAX_EVENTS 1024
-
-const bool debug = true;
-
-void usage(const char *name);
-
-class TcpServer {
-    public:
-        TcpServer(uint32_t port);
-        ~TcpServer();
-
-        int epollrun(void); 
-
-    private:
-        int domain_;
-        int type_;
-        int protocol_ = 0;
-        uint32_t port_;
-
-        int sfd_ = 0;
-};
+#include "commands.h"
 
 int  TcpServer::epollrun(void) {
     int ret;
     if((sfd_ = socket(domain_, type_, 0)) == -1) {
         perror("create socket fail");
     }
+    int on = 0;
+    // no nagle
+    ret = setsockopt(sfd_, IPPROTO_TCP, TCP_NODELAY, (const void *)&on, sizeof(on));
+    if( ret == -1) 
+    {
+        perror("setsockopt TCP_NODELAY fail");
+    }
+    
+    // keep alive 
+    bool keepalive = true;
+    ret = setsockopt(sfd_, SOL_SOCKET, SO_KEEPALIVE, (const void *)&keepalive, sizeof(keepalive));
+    if(ret == -1) {
+        perror("setsockopt SO_KEEPALIVE fail");
+    }
+    
+    // set tos
+    int tostype = 0xcc;
+    if((ret = setsockopt(sfd_, IPPROTO_IP, IP_TOS, (const void *)&tostype, sizeof(tostype))) == -1) {
+        perror("setsockopt tos type fail");
+    }
+    
+    // set ttl, has no effect, why?
+    int ttl = 0x20;
+    if((ret = setsockopt(sfd_, IPPROTO_TCP, IP_TTL, (const void *)&ttl, sizeof(ttl))) == -1) {
+        perror("setsockopt ttl fail");
+    }
+    
+    // set recv timeout
+    struct timeval tv;
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    if((ret = setsockopt(sfd_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) == -1) {
+        perror("setsockopt recv timeout fail");
+    }
+
 
     struct sockaddr_in my_addr;
     memset(&my_addr, 0, sizeof(my_addr));
@@ -95,6 +108,7 @@ int  TcpServer::epollrun(void) {
                     perror("accept fail");
                     continue;
                 }
+                
 
                 char *ip = inet_ntoa(remote_addr.sin_addr);
                 std::cout<<"connected from "<<ip<<std::endl;
@@ -104,40 +118,8 @@ int  TcpServer::epollrun(void) {
                     continue;
                 }
 
-                fcntl(cfd,F_SETFL,O_NONBLOCK);
 
-                bool on = false;
-                // no nagle
-                if((ret = setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, (const void *)&on, sizeof(on))) == -1) 
-                {
-                    perror("setsockopt fail");
-                }
-                
-                // keep alive 
-                bool keepalive = true;
-                if((ret = setsockopt(cfd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&keepalive, sizeof(keepalive))) == -1) {
-                    perror("setsockopt fail");
-                }
-                
-                // set tos
-                int tostype = 0xcc;
-                if((ret = setsockopt(cfd, IPPROTO_IP, IP_TOS, (const void *)&tostype, sizeof(tostype))) == -1) {
-                    perror("setsockopt tos type fail");
-                }
-                
-                // set ttl, has no effect, why?
-                int ttl = 0x20;
-                if((ret = setsockopt(cfd, IPPROTO_TCP, IP_TTL, (const void *)&ttl, sizeof(tostype))) == -1) {
-                    perror("setsockopt ttl fail");
-                }
-                
-                // set recv timeout
-                struct timeval tv;
-                tv.tv_sec = 5;
-                tv.tv_usec = 0;
-                if((ret = setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) == -1) {
-                    perror("setsockopt recv timeout fail");
-                }
+                fcntl(cfd,F_SETFL,O_NONBLOCK);
 
                 // ev.events = EPOLLIN | EPOLLET ; 
                 ev.events = EPOLLIN; 
@@ -173,6 +155,39 @@ int  TcpServer::epollrun(void) {
                     close(events[n].data.fd);
                 }
                 else {
+                    int32_t len = 0;
+                    int32_t magicbegin = 0;
+                    memcpy((void *)&magicbegin, buf, sizeof(int32_t));
+                    std::cout<<"magicbegin = 0x";
+                    std::cout<<std::setbase(16);
+                    std::cout<<magicbegin<<std::endl;
+                    
+                    len += sizeof(int32_t);
+
+                    struct s_args args;
+                    memset((void *)&args, 0, sizeof(args));
+                    memcpy((void *)&args,  buf+len, sizeof(args));
+                    len += sizeof(args);
+                    
+                    std::cout<<"p.i = 0x";
+                    std::cout<<args.i<<std::endl;
+                    std::cout<<"p.j = 0x";
+                    std::cout<<args.j<<std::endl;
+                    std::cout<<"p.k = 0x";
+                    std::cout<<args.k<<std::endl;
+                    
+                    char msg[1024]="\0"; 
+                    strncat(msg, buf+len, 1024);
+                    std::cout<<"msg = "<<msg<<std::endl;
+                    len += strlen(msg) + 1;
+                    
+                    int32_t magicend = 0;
+                    memcpy((void *)&magicend, buf+len, sizeof(int32_t));
+                    std::cout<<"magicend = 0x";
+                    std::cout<<magicend<<std::endl;
+
+                    continue;
+
                     // for test struct
                     struct s_args *p = (struct s_args *)buf;
                     std::cout<<"p->i = "<<p->i<<std::endl;
@@ -248,40 +263,6 @@ TcpServer::~TcpServer() {
     close(sfd_);
 }
 
-class Command {
-    public:
-        Command(const char *command):command(command) {}
-        ~Command() {fclose(fp);}
-
-        void run(void);
-
-    private:
-        const int len = 1024;
-        const char *command;
-        FILE *fp;
-        const char * const mode = "r";
-};
-
-class BatchCommand {
-    public:
-        BatchCommand(int cnt, char **commands)
-        {
-            for(int i = 1; i < cnt; ++i) {
-                cmds.push(*(commands+i));
-            }
-        }
-
-        ~BatchCommand() {}
-        int run(void); // use multi thread.
-        int epoll_run(void); // use epoll.
-        int select_run(void); // use select.
-        void test(void);
-
-    private:
-        int _run(void);
-        std::stack<const char *> cmds;
-        std::mutex mutex_;
-};
 
 int BatchCommand::epoll_run(void) {
 
@@ -434,7 +415,26 @@ void Command::run(void) {
     std::cout<<std::endl;
 }
 
+AsyncIO::AsyncIO(int argc, char **argv) {
+    for(int i = 1; i < argc; ++i) {
+        filenames_.push_back(*(argv+i));
+    }
+}
+
+AsyncIO::~AsyncIO() {
+}
+
+void AsyncIO::test(void) {
+}
+
+
 int main(int argc, char *argv[]) {
+    if(argc == 1) {
+        aiousage(argv[0]);
+    }
+
+    return aiotest(argc, argv); 
+    
     TcpServer s(9999);
     s.epollrun();
 
@@ -462,3 +462,142 @@ void usage(const char *name) {
     exit(0);
 }
 
+void aiousage(const char *name) {
+    std::cout<<name<<" [filename1[filename2[...]]]"<<std::endl;
+    exit(0);
+}
+
+int aiotest(int argc, char **argv) {
+    int numReqs = argc -1; // total request num
+    
+    struct ioRequest *ioList = (struct ioRequest *)calloc(numReqs, sizeof(ioRequest));
+    if(ioList == NULL) {
+        perror("ioList NULL;");
+        return -1;
+    }
+
+    struct aiocb *aiocbList = (struct aiocb *)calloc(numReqs, sizeof(aiocb));
+    if(aiocbList == NULL) {
+        perror("aiocbList NULL;");
+        return -1;
+    }
+
+    struct sigaction sa, osa_quit, osa_aio;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sa.sa_handler = quitHandler;
+    if(sigaction(SIGQUIT, &sa, &osa_quit) == -1) {
+        perror("sigaction fail");
+        return -1;
+    }
+   
+    sa.sa_flags = SA_RESTART | SA_SIGINFO;
+    sa.sa_handler = aioSigHandler;
+    if(sigaction(IO_SIGNAL, &sa, &osa_aio) == -1) {
+        perror("sigaction fail");
+        return -1;
+    }
+
+    for(int j = 0; j < numReqs; ++j) {
+        ioList[j].reqNum = j;
+        ioList[j].status = EINPROGRESS;
+        ioList[j].aiocbp = &aiocbList[j];
+        ioList[j].aiocbp->aio_fildes = open(argv[j+1], O_RDONLY);
+        ioList[j].aiocbp->aio_buf = malloc(BUF_SIZE);
+        ioList[j].aiocbp->aio_nbytes = BUF_SIZE;
+        ioList[j].aiocbp->aio_reqprio = 0;
+        ioList[j].aiocbp->aio_offset = 0;
+        ioList[j].aiocbp->aio_sigevent.sigev_notify = SIGEV_SIGNAL;
+        ioList[j].aiocbp->aio_sigevent.sigev_signo = IO_SIGNAL;
+        ioList[j].aiocbp->aio_sigevent.sigev_value.sival_ptr = &ioList[j];
+
+        if(ioList[j].aiocbp->aio_fildes == -1) {
+            perror("open fail");
+            return -1;
+        }
+        if(ioList[j].aiocbp->aio_buf == NULL) {
+            std::cout<<"malloc fail"<<std::endl;
+            return -1;
+        }
+        std::cout<<"open "<<argv[j+1]<<" on descriptor "<<ioList[j].aiocbp->aio_fildes<<std::endl;
+        
+        int s = aio_read(ioList[j].aiocbp);
+        if(s == -1) {
+            std::cout<<"aio_read fail"<<std::endl;
+            return -1;
+        }
+    }
+        
+    for(int openReqs = numReqs; openReqs > 0; ) {
+        sleep(3);
+        if(gotSIGQUIT) {
+            std::cout<<"got SIGQUIT; canceling I/O requests"<<std::endl;
+            for( int j = 0; j < numReqs; ++j ) {
+                if(ioList[j].status == EINPROGRESS) {
+                    std::cout<<"request "<<j<<" on descriptor "<<ioList[j].aiocbp->aio_fildes<<std::endl;
+
+                    int s = aio_cancel(ioList[j].aiocbp->aio_fildes, ioList[j].aiocbp);
+
+                    if(s == AIO_CANCELED) {
+                        std::cout<<"I/O canceled"<<std::endl;
+                    }
+                    else if(s == AIO_NOTCANCELED) {
+                        std::cout<<"I/O not calceled"<<std::endl;
+                    }
+                    else if(s == AIO_ALLDONE) {
+                        std::cout<<"I/O all done"<<std::endl;
+                    }
+                    else {
+                        perror("aio_cancel fail");
+                        return -1;
+                    }
+                }
+            }
+            gotSIGQUIT = 0;
+        }
+        
+        std::cout<<"aio_error()"<<std::endl;
+        for(int j = 0; j < numReqs; ++j) {
+            if(ioList[j].status == EINPROGRESS) {
+                std::cout<<"for request "<<j<<" descriptor "<<ioList[j].aiocbp->aio_fildes<<" ";
+                ioList[j].status = aio_error(ioList[j].aiocbp);
+                switch(ioList[j].status) {
+                    case 0:
+                        std::cout<<"I/O successed"<<std::endl;
+                        break;
+                    case EINPROGRESS:
+                        std::cout<<"in progress"<<std::endl;
+                        break;
+                    case ECANCELED:
+                        std::cout<<"cancled"<<std::endl;
+                        break;
+                    default:
+                        perror("aio_error");
+                        break;
+                }
+
+                if(ioList[j].status != EINPROGRESS) {
+                    --openReqs;
+                }
+            }
+        }
+    }
+
+    std::cout<<"All I/O requests complete"<<std::endl;
+
+    std::cout<<"aio_return():"<<std::endl;
+    for(int j = 0; j < numReqs; ++j) {
+        ssize_t s = aio_return(ioList[j].aiocbp);
+
+        std::cout<<"for request "<<j<<" descriptor "<<ioList[j].aiocbp->aio_fildes;
+        std::cout<<" len "<<s<<std::endl;
+
+    }
+    
+    if(sigaction(SIGQUIT, &osa_quit, NULL) == -1) {
+        perror("sigaction fail");
+        return -1;
+    }
+ 
+    return 0;
+}
