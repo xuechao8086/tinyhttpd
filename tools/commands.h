@@ -69,7 +69,7 @@ class AsyncIO {
         std::vector<const char *> filenames_;
 };
 
-#define BUF_SIZE 20
+#define BUF_SIZE 102400
 #define errExit(msg) do {perror(msg); exit(EXIT_FAILURE); } while(false)
 #define errMsg(msg) do {perror(msg); } while(false)
 
@@ -87,8 +87,8 @@ static void quitHandler(int signo) {
 
 #define IO_SIGNAL SIGUSR1
 
-//static void aioSigHandler(int sig, siginfo_t *si, void *ucontext) {
-static void aioSigHandler(int sig) {
+static void aioSigHandler(int sig, siginfo_t *si, void *ucontext) {
+//static void aioSigHandler(int sig) {
     write(STDOUT_FILENO, "I/O completion signal received\n", 31);
 }
 

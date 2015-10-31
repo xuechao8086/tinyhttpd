@@ -492,7 +492,7 @@ int aiotest(int argc, char **argv) {
     }
    
     sa.sa_flags = SA_RESTART | SA_SIGINFO;
-    sa.sa_handler = aioSigHandler;
+    sa.sa_sigaction = aioSigHandler;
     if(sigaction(IO_SIGNAL, &sa, &osa_aio) == -1) {
         perror("sigaction fail");
         return -1;
@@ -592,12 +592,18 @@ int aiotest(int argc, char **argv) {
         std::cout<<"for request "<<j<<" descriptor "<<ioList[j].aiocbp->aio_fildes;
         std::cout<<" len "<<s<<std::endl;
 
+        std::cout<<(char *)ioList[j].aiocbp->aio_buf<<std::endl;
+
     }
     
     if(sigaction(SIGQUIT, &osa_quit, NULL) == -1) {
         perror("sigaction fail");
         return -1;
     }
- 
+    if(signal(IO_SIGNAL, SIG_IGN) == SIG_ERR) {
+        perror("sigaction fail");
+        return -1;
+    }
+    
     return 0;
 }
