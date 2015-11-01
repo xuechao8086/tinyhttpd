@@ -11,6 +11,7 @@
 #include <float.h>
 
 // for linux env 
+#include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/epoll.h>

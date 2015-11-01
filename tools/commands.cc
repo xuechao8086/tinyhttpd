@@ -483,6 +483,9 @@ int aiotest(int argc, char **argv) {
     }
 
     struct sigaction sa, osa_quit, osa_aio;
+    memset(&sa, 0, sizeof(sa));
+    memset(&osa_quit, 0, sizeof(sa));
+    memset(&osa_aio, 0, sizeof(sa));
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
     sa.sa_handler = quitHandler;
@@ -490,7 +493,8 @@ int aiotest(int argc, char **argv) {
         perror("sigaction fail");
         return -1;
     }
-   
+    
+    memset(&sa, 0, sizeof(sa));
     sa.sa_flags = SA_RESTART | SA_SIGINFO;
     sa.sa_sigaction = aioSigHandler;
     if(sigaction(IO_SIGNAL, &sa, &osa_aio) == -1) {
@@ -510,6 +514,8 @@ int aiotest(int argc, char **argv) {
         ioList[j].aiocbp->aio_sigevent.sigev_notify = SIGEV_SIGNAL;
         ioList[j].aiocbp->aio_sigevent.sigev_signo = IO_SIGNAL;
         ioList[j].aiocbp->aio_sigevent.sigev_value.sival_ptr = &ioList[j];
+    
+        memset((void *)ioList[j].aiocbp->aio_buf, 0, BUF_SIZE);
 
         if(ioList[j].aiocbp->aio_fildes == -1) {
             perror("open fail");
@@ -520,9 +526,8 @@ int aiotest(int argc, char **argv) {
             return -1;
         }
         std::cout<<"open "<<argv[j+1]<<" on descriptor "<<ioList[j].aiocbp->aio_fildes<<std::endl;
-        
         int s = aio_read(ioList[j].aiocbp);
-        if(s == -1) {
+        if( s == -1) {
             std::cout<<"aio_read fail"<<std::endl;
             return -1;
         }
@@ -556,7 +561,7 @@ int aiotest(int argc, char **argv) {
             gotSIGQUIT = 0;
         }
         
-        std::cout<<"aio_error()"<<std::endl;
+        std::cout<<"aio_error():"<<std::endl;
         for(int j = 0; j < numReqs; ++j) {
             if(ioList[j].status == EINPROGRESS) {
                 std::cout<<"for request "<<j<<" descriptor "<<ioList[j].aiocbp->aio_fildes<<" ";
