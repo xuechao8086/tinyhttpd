@@ -196,13 +196,29 @@ int util::read_pid(const char *path) {
 }
 
 int main(int argc, char *argv[]) {
+    int pipefd[2] = {0, 0};
+    
+    if(pipe(pipefd) < 0) {
+        perror("pipe fail");
+        return -1;
+    }
+
+
     pid_t pid = fork();
     if(pid < 0) {
         perror("fork fail");
         return -1;
     }
     else if(pid == 0) { 
-        util::write_pid("/home/charlie/tmp/child.pid"); 
+        close(pipefd[0]);
+        
+        pid_t rpid = getpid();
+        write(pipefd[1], (const void *) &rpid, sizeof(rpid));
+
+        close(pipefd[1]);
+
+         
+        //util::write_pid("/home/charlie/tmp/child.pid"); 
         
         int ret = util::test_sigaction();     
         std::cout<<"child process, pid:"<<getpid();
@@ -210,10 +226,17 @@ int main(int argc, char *argv[]) {
         return ret;
     }
     else {
-        util::write_pid("/home/charlie/tmp/father.pid"); 
-        sleep(1);
+        close(pipefd[1]);
+        int cpid = 0;
+        read(pipefd[0], (void *)&cpid, sizeof(cpid));
+        std::cout<<"child pid(from father):"<<cpid<<std::endl;
+        close(pipefd[0]); 
+
+        //use pipe instead to get pid
+        // util::write_pid("/home/charlie/tmp/father.pid"); 
+        // sleep(1);
                  
-        int32_t cpid = util::read_pid("/home/charlie/tmp/child.pid");
+        //int32_t cpid = util::read_pid("/home/charlie/tmp/child.pid");
         util::send_sig_quit("SIGQUIT from father", cpid);
 
         int status = 0;
