@@ -22,6 +22,15 @@
 #include <errno.h>
 #include <pthread.h>
 
+// for shm, system v
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+// for posix shm
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 // for posix aio
 #include <aio.h>
 
