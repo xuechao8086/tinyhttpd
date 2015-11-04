@@ -22,6 +22,9 @@
 #include <errno.h>
 #include <pthread.h>
 
+//for heapsort
+#include <bsd/stdlib.h>
+
 // for shm, system v
 #include <sys/ipc.h>
 #include <sys/shm.h>

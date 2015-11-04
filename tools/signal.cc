@@ -6,6 +6,21 @@
 #include "head.h"
 
 namespace util {
+    void test(void);
+
+    // for pthread
+    const int NTHR = 8;
+    const int NUMNUM = 8000000;
+    const int TNUM = NUMNUM/NTHR;
+    
+    int64_t nums[NUMNUM];
+    int64_t snums[NUMNUM];
+    pthread_barrier_t b;
+
+    int complong(const void *args1, const void *args2);
+    void *thr_fn(void *arg);
+    void merge(); 
+
     // for signal SIGCHLD
     void sig_chld(int signo) { 
         int status = 0;
@@ -41,6 +56,49 @@ namespace util {
     // posix shm
     int posix_shm_test(void);
 }
+
+void util::test(void) {
+    int32_t arr[16];
+    memset(arr, 1986, sizeof(arr));
+    for(int32_t i = 0; i < 16; arr[i] = ++i*10);
+    for(int32_t i = 0; i < 16; ++i) {
+        std::cout<<"arr["<<i<<"] = "<<arr[i]<<std::endl;
+    }
+}
+
+int util::complong(const void *args1,  const void *args2) {
+    int64_t i = *(int64_t *)args1;
+    int64_t j = *(int64_t *)args2;
+
+    if(i > j) {
+        return -1;
+    }
+    else if(i == j) {
+        return 0;
+    }
+    else {
+        return 1;
+    }
+}
+
+void *util::thr_fn(void *arg) {
+    int64_t idx = (int64_t)arg;
+
+    qsort(&util::nums[idx], util::TNUM, sizeof(int64_t), util::complong);
+
+    pthread_barrier_wait(&util::b);
+    return ((void *)0);
+}
+
+void util::merge(void) {
+    int64_t idx[util::NTHR];
+    
+    int64_t num = LONG_MAX;
+    for(int64_t i = 0; i < util::NTHR; idx[i] = i*util::TNUM, i++);
+    for(int64_t sidx = 0; sidx < util::NUMNUM; ++sidx) {
+
+}
+
 
 void util::sig_quit(int signo) {
     std::cout<<"catch SIGQUIT"<<std::endl;
@@ -150,7 +208,7 @@ int util::test_sigpending(void) {
     if(sigprocmask(SIG_SETMASK, &oldmask, NULL)< 0) {
         perror("sigpending fail");
         return -1;
-    
+    } 
     
     std::cout<<"SIGQUIT unblocked"<<std::endl;
     std::cout<<"SIGINT unblocked"<<std::endl;
@@ -277,15 +335,28 @@ int util::posix_shm_test(void) {
     write(fd, buf, strlen(buf)+1);
     close(fd);
     
-    if(shm_unlink(name) == -1) {
-        perror("shm_unlink fail");
+    // if(shm_unlink(name) == -1) {
+    //    perror("shm_unlink fail");
+    //    return -1;
+    // }
+
+    int fd2 = open("/dev/shm/posix_shm2.dat", O_CREAT, S_IRUSR|S_IWUSR);
+    if(fd2 == -1) {
+        perror("open fail");
         return -1;
     }
+    write(fd2, buf, strlen(buf)+1);
+    close(fd2);
+
     return 0;
 }
 
 
 int main(int argc, char *argv[]) {
+    util::test();
+    return 0;
+    
+    
     util::posix_shm_test();
     util::shm_test2(); 
     // util::shm_test();
