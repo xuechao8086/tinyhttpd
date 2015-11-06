@@ -51,6 +51,120 @@ int util::test_msg(void) {
     return 0;
 }
 
+int util::test_msg2(void) {
+    using namespace std;
+    struct msg *mp = (struct msg *)calloc(1, sizeof(struct msg));
+    mp->m_next = NULL;
+    pthread_t id[2];
+    pthread_attr_t attr[2];
+    
+    typedef void* (*start_routine)(void *);
+    
+    start_routine func[2] = {process_msg, enqueue_msg}; 
+    
+    for(int8_t i = 0;  i < 2; ++i) {
+        if(pthread_attr_init(&attr[i]) != 0) {
+            perror("pthread_attr_init fail");
+            return -1;
+        }
+        if(pthread_attr_setdetachstate(&attr[i], PTHREAD_CREATE_DETACHED) != 0) {
+            perror("pthread_attr_setdetachstate fail");
+            return -1;
+        }
+
+    }
+    
+    pthread_create(&id[0], &attr[0], func[0], (void *)NULL);
+    pthread_create(&id[1], &attr[1], func[1], (void *)mp);
+    
+    pause();
+    pthread_attr_destroy(&attr[0]);
+    pthread_attr_destroy(&attr[1]);
+
+    return 0;
+}
+
+int util::test_msg3(int argc, char **argv) {
+    pthread_t thr;
+    pthread_attr_t attr;
+
+    if(argc > 1) {
+        pthread_attr_t *attrp = &attr;
+
+        if(pthread_attr_init(&attr) != 0)  {
+            perror("pthread_init fail");
+            return -1;
+        }
+
+        if(pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
+            perror("pthread_attr_setdetachstate fail");
+            return -1;
+        }
+        
+        if(pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED) != 0) {
+            perror("pthread_attr_setinheritsched fail");
+            return -1;
+        }
+
+        uint64_t stack_size = strtoul(argv[1], NULL, 10);
+
+        void *sp = NULL;
+        if(posix_memalign(&sp, sysconf(_SC_PAGESIZE), stack_size) !=  0) {
+            perror("posix_memalign");
+            return -1;
+        }
+
+        std::cout<<"posix_memalign() allocated at "<<sp<<std::endl;
+
+        if(pthread_attr_setstack(&attr, sp, stack_size) != 0) {
+            perror("pthread_attr_setstacksize");
+            return -1; 
+        }
+        
+        if(pthread_create(&thr, attrp, &util::thread_property, NULL) != 0) {
+            perror("pthread_create fail");
+            return -1;
+        }
+        
+        if(pthread_attr_destroy(attrp) != 0) {
+            perror("pthread_attr_destroy fail");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+void * util::thread_property(void *args) {
+    pthread_attr_t gattr;
+    if(pthread_getattr_np(pthread_self(), &gattr) != 0) {
+        perror("pthread_getattr_np fail");
+        return NULL;
+    }
+    
+    int detachstate = 0;
+    if(pthread_attr_getdetachstate(&gattr, &detachstate) != 0) {
+        perror("pthread_attr_getdetachstate fail");
+        return NULL;
+    }
+    
+    int scope = 0;
+    if(pthread_attr_getscope(&gattr, &scope) != 0) {
+        perror("pthread_attr_getscope");
+        return NULL;
+    }
+    
+    int inheritsched = 0;
+    if(pthread_attr_getinheritsched(&gattr, &inheritsched) != 0) {
+        perror("pthread_attr_getinheritsched");
+        return NULL;
+    }
+
+    std::cout<<"detachstate = "<<detachstate<<std::endl;
+    
+    return NULL;
+}
+
+
 void util::test(void) {
     int32_t arr[16];
     memset(arr, 1986, sizeof(arr));
@@ -400,8 +514,80 @@ int util::posix_shm_test(void) {
     return 0;
 }
 
+int util::test_mmap(const char *fromfile, const char *tofile) {
+    struct stat buf;
+    if(stat(fromfile, &buf) != 0) {
+        perror("stat");
+        return -1;
+    }
+    
+    int64_t st_size = buf.st_size;
+    if(st_size == 0) {
+        perror("empty file");
+        return -1;
+    }
+    
+    int fd = open(fromfile, O_RDONLY);
+    if(fd == -1) {
+        perror("open fail");
+        return -1;
+    }
+
+    void *ptr = mmap(NULL, st_size, PROT_READ, MAP_SHARED, fd, 0);
+    if(ptr == MAP_FAILED) {
+        perror("mmap fail");
+        return -1; 
+    }
+
+    close(fd);
+    
+    std::cout<<"file content:"<<std::endl;
+    std::cout<<(char *)ptr;
+    
+    int fd2 = open(tofile, O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
+    if(fd2 == -1)  {
+        perror("open fail");
+        return -1;
+    }
+    
+    if(ftruncate(fd2, st_size+10)  == -1) {
+        std::cout<<__FILE__<<":"<<__LINE__<<" "<<__func__<<" fail"<<std::endl;
+        return -1;
+    }
+
+    void *ptr2 = mmap(NULL, st_size+10, PROT_READ|PROT_WRITE, MAP_SHARED, fd2, 0);
+    if(ptr2 == MAP_FAILED) {
+        std::cout<<__FILE__<<":"<<__LINE__<<" "<<__func__<<" fail";
+        std::cout<<std::endl; 
+        return -1;
+    }
+    
+    memcpy(ptr2, ptr, st_size); 
+    
+    //const char *name = "charliezhao";
+    //memcpy(ptr2, name, strlen(name)+1);
+    if(msync(ptr2, st_size, MS_SYNC) == -1) {
+        perror("msync fail");
+        return -1;
+    }
+
+    if(munmap(ptr, st_size) == -1) {
+        perror("munmap fail");
+        return -1;
+    }
+    
+    if(munmap(ptr2, st_size+10) == -1) {
+        perror("munmap fail");
+    }
+    
+    close(fd2);
+    return 0;
+}
+
 
 int main(int argc, char *argv[]) {
+    return util::test_mmap("/home/charlie/tinyhttpd/tools/dat", "/home/charlie/tinyhttpd/tools/dat3");
+    return util::test_msg2(); 
     return util::test_msg();
     return util::thread_test(); 
     
@@ -467,3 +653,4 @@ int main(int argc, char *argv[]) {
     }
 
 }
+

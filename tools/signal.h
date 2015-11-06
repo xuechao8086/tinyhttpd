@@ -69,6 +69,13 @@ namespace util {
     //void enqueue_msg(struct msg *mp);
     void * enqueue_msg(void *mp);
     int test_msg(void);
+    int test_msg2(void);
+    void * thread_property(void *);
+    int test_msg3(int argc, char **argv);
+
+    //mmap test
+
+    int test_mmap(const char *fromfile, const char *tofile);
 }
 
 #endif
