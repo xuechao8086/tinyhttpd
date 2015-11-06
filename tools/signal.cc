@@ -1,66 +1,60 @@
-/*
- * memo: you can send signal from another process or another thread
- *
- */
+#include "signal.h"
 
-#include "head.h"
+void * util::process_msg(void *args) {
+    using namespace util;
+    struct msg *mp;
 
-namespace util {
-    void test(void);
-
-    // for pthread
-    const int NTHR = 8;
-    const int NUMNUM = 8000000;
-    const int TNUM = NUMNUM/NTHR;
-    
-    int64_t nums[NUMNUM];
-    int64_t snums[NUMNUM];
-    pthread_barrier_t b;
-
-    int complong(const void *args1, const void *args2);
-    void *thr_fn(void *arg);
-    void merge(); 
-
-    // for signal SIGCHLD
-    void sig_chld(int signo) { 
-        int status = 0;
-        pid_t pid = wait(&status);
-        std::cout<<"child "<<pid<<" terminated"<<std::endl;
+    while(true) {
+        pthread_mutex_lock(&qlock);
+        while(workq == NULL) {
+            pthread_cond_wait(&qready, &qlock);
+        }
+        mp = workq;
+        
+        std::cout<<__FILE__<<":"<<__LINE__<<" "<<__func__<<" ";
+        std::cout<<std::endl;
+        workq = mp->m_next;
+        pthread_mutex_unlock(&qlock);
     }
-    
-    // for signal SIGPIPE
-    void sig_int(int signo);
-    void sig_pipe(int signo);
-    void sig_quit(int signo);
-    
-    void sig_int2(int signo, siginfo_t *si, void *ucontext);
-    int test_sigpending(void);
-    int test_sigaction(void);
-    int send_sig_quit(const char *, int32_t pid);
+    return NULL;
+}
 
-    // pid info
-    int write_pid(const char *path);
-    int read_pid(const char *path);
+//void * util::enqueue_msg(struct msg *mp) {
+void * util::enqueue_msg(void *args) {
+    using namespace util;
+    struct msg *mp = (struct msg *)args;
+    while(true) {
+        pthread_mutex_lock(&qlock); 
+        mp->m_next = workq;
+        workq = mp;
+        std::cout<<__FILE__<<":"<<__LINE__<<" "<<__func__<<" ";
+        std::cout<<std::endl;
+        pthread_mutex_unlock(&qlock);
+        //pthread_cond_signal(&qready);
+        pthread_cond_broadcast(&qready);
+        sleep(1);
+    }
+    return args;
+}
 
-    // system v shm
-    const int ARRAY_SIZE = 4000;
-    const int MALLOC_SIZE = 100000;
-    const int SHM_SIZE = 100000;
-    const int SHM_MODE = 0666;
-    const int SHMID = 0xee; 
 
-    int shm_test(void);
-    int shm_test2(void);
-    int shm_test3(void);
-
-    // posix shm
-    int posix_shm_test(void);
+int util::test_msg(void) {
+    using namespace std; 
+    struct msg *mp = (struct msg *)calloc(1, sizeof(struct msg));
+    mp->m_next = NULL;
+    pthread_t tid[2];
+    pthread_create(&tid[0], NULL, process_msg, (void *) NULL);
+    pthread_create(&tid[1], NULL, enqueue_msg, (void *)mp); 
+    for(int8_t i = 0; i < 2; ++i) { 
+        pthread_join(tid[i], NULL);
+    }
+    return 0;
 }
 
 void util::test(void) {
     int32_t arr[16];
     memset(arr, 1986, sizeof(arr));
-    for(int32_t i = 0; i < 16; arr[i] = ++i*10);
+    for(int32_t i = 0; i < 16; arr[i] = i*10, ++i);
     for(int32_t i = 0; i < 16; ++i) {
         std::cout<<"arr["<<i<<"] = "<<arr[i]<<std::endl;
     }
@@ -93,9 +87,64 @@ void *util::thr_fn(void *arg) {
 void util::merge(void) {
     int64_t idx[util::NTHR];
     
-    int64_t num = LONG_MAX;
     for(int64_t i = 0; i < util::NTHR; idx[i] = i*util::TNUM, i++);
     for(int64_t sidx = 0; sidx < util::NUMNUM; ++sidx) {
+        int64_t num = LONG_MAX;
+        int64_t minidx = 0;
+        for(int64_t i = 0; i < util::NTHR; ++i) {
+            if((idx[i] < (i+1)*util::TNUM) && (util::nums[idx[i]] < num)) {
+                num = util::nums[idx[i]];
+                minidx = i; 
+            }
+        }
+        util::snums[sidx] = util::nums[idx[minidx]];
+        ++idx[minidx];
+    }
+}
+
+void util::merge2(void) {
+    // to be done
+    for(int64_t i = 0; i < util::NUMNUM; ++i) {
+        for(int j = 0; j < util::NTHR; ++j) {
+        }
+    }
+
+}
+
+int util::thread_test(void) {
+    pthread_t tid[util::NTHR]; 
+
+    srandom(1);
+    for(int64_t i = 0; i < util::NUMNUM; ++i) {
+        util::nums[i] = random();
+    }
+    
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    pthread_barrier_init(&util::b, NULL, util::NTHR+1);
+    for(int64_t i = 0; i < util::NTHR; ++i) {
+        if(pthread_create(&tid[i], NULL, util::thr_fn, (void *)(i *util::TNUM)) == -1) {
+            perror("pthread_create fail");
+            return -1;
+        }
+    }
+
+    pthread_barrier_wait(&util::b);
+    util::merge();
+
+    struct timeval end; 
+    gettimeofday(&end, NULL);
+
+    int64_t startusec = start.tv_sec*1000000 + start.tv_usec;
+    int64_t endusec = end.tv_sec*1000000 + end.tv_usec;
+
+    double elapsed = (double)(endusec - startusec)/1000000.0;
+    std::cout<<"sort toke "<<elapsed<<" seconds"<<std::endl;
+
+    // for(int64_t i = 0; i < util::NUMNUM; ++i) {
+    //    std::cout<<"snums["<<i<<"] = "<<util::snums[i]<<std::endl;
+    // }
+    return 0;
 
 }
 
@@ -353,6 +402,9 @@ int util::posix_shm_test(void) {
 
 
 int main(int argc, char *argv[]) {
+    return util::test_msg();
+    return util::thread_test(); 
+    
     util::test();
     return 0;
     

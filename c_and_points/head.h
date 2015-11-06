@@ -21,6 +21,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <pthread.h>
+#include <limits.h>
 
 //for heapsort
 #include <bsd/stdlib.h>
