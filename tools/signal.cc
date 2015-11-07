@@ -586,6 +586,8 @@ int util::test_mmap(const char *fromfile, const char *tofile) {
 
 
 int main(int argc, char *argv[]) {
+    
+    std::cout<<"errno = "<<errno<<std::endl;
     return util::test_mmap("/home/charlie/tinyhttpd/tools/dat", "/home/charlie/tinyhttpd/tools/dat3");
     return util::test_msg2(); 
     return util::test_msg();
