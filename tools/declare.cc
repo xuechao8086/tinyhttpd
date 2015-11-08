@@ -1,3 +1,8 @@
+/*
+ * todo:
+ *  function args explain.
+ *
+ */
 #include "head.h"
 
 namespace declare {
@@ -22,6 +27,7 @@ namespace declare {
             return QUALIFIER;
         }
         if(!strcmp(s, "volatile")) {
+            strcpy(s, "volatile"); 
             return QUALIFIER;
         }
 
@@ -64,6 +70,7 @@ namespace declare {
         if(*p == '*') {
             strcpy(that.string, "point to");
             that.type = '*';
+            return;
         }
 
         that.string[1] = '\0';
@@ -105,7 +112,7 @@ namespace declare {
 
     void deal_with_pointers() {
         while(stack[top].type == '*') {
-            std::cout<<pop.string<<" ";
+            std::cout<<stack[top--].string<<" ";
         }
     }
 
