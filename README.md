@@ -11,4 +11,5 @@ by the way, it also shiped some other file:
 * threadexample.c (a simple thread example)
 * thread.py (comparable version in python)
 * rpccli.py rpcsvr.py (python simple rpc tools for debug)
-
+* some c/c++ exercise and tools
+* some python exercise and tools.
