@@ -66,16 +66,19 @@ namespace util {
     pthread_mutex_t qlock = PTHREAD_MUTEX_INITIALIZER;
     
     void * process_msg(void *);
-    //void enqueue_msg(struct msg *mp);
+    // void enqueue_msg(struct msg *mp);
     void * enqueue_msg(void *mp);
     int test_msg(void);
     int test_msg2(void);
     void * thread_property(void *);
     int test_msg3(int argc, char **argv);
 
-    //mmap test
-
+    // mmap test
     int test_mmap(const char *fromfile, const char *tofile);
+    
+    // msg queue test
+    int test_mq(const char *name);
+
 }
 
 #endif

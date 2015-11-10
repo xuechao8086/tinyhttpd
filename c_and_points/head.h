@@ -23,8 +23,11 @@
 #include <pthread.h>
 #include <limits.h>
 
+// for msgqueue
+#include <mqueue.h>
+
 //for heapsort
-#include <bsd/stdlib.h>
+// #include <bsd/stdlib.h>
 
 // for shm, system v
 #include <sys/ipc.h>

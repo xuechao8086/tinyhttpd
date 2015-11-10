@@ -584,10 +584,63 @@ int util::test_mmap(const char *fromfile, const char *tofile) {
     return 0;
 }
 
+int util::test_mq(const char *name) {
+    mqd_t fd = mq_open(name, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR, NULL);
+    if(fd == -1) {
+        perror("mq_open fail");
+        return -1;
+    }
+    
+    pid_t pid = fork();
+    if(pid < 0) {
+        perror("fork fail");
+        return -1;
+    }
+    else if(pid == 0) {
+        sleep(1);
+        unsigned int msg_prio = 1;
+        struct mq_attr attr;
+        if(mq_getattr(fd, &attr) == -1) {
+            perror("mq_getattr fail");
+            return -1;
+        }
+        char *buf = (char *)malloc(attr.mq_msgsize);
+        if(buf == NULL) {
+            perror("calloc fail");
+            return -1;
+        }
+        memset(buf, 0, attr.mq_msgsize);
+
+        if(mq_receive(fd, buf, attr.mq_msgsize,  &msg_prio) == -1) {
+            perror("mq_receive fail");
+            return -1;
+        };
+        std::cout<<"msg = "<<buf<<std::endl;
+
+    }
+    else {
+        const char *msg = "hello from charliezhao for mq.\n";
+        if(mq_send(fd, msg, strlen(msg)+1, 1) == -1) {
+            perror("mq_send fail");
+            return -1;
+        }
+        int status = 0;
+        wait(&status);
+        pause();
+    }    
+
+    if(mq_close(fd) == -1) {
+        perror("mq_close fail");
+        return -1;
+    }
+
+    return 0;
+}
 
 int main(int argc, char *argv[]) {
-    
+    return util::test_mq("/mq.dat"); 
     std::cout<<"errno = "<<errno<<std::endl;
+    
     return util::test_mmap("/home/charlie/tinyhttpd/tools/dat", "/home/charlie/tinyhttpd/tools/dat3");
     return util::test_msg2(); 
     return util::test_msg();
