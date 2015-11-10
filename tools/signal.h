@@ -78,6 +78,7 @@ namespace util {
     
     // msg queue test
     int test_mq(const char *name);
+    int test_mq_with_signal(const char *name);
 
 }
 

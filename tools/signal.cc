@@ -1,3 +1,9 @@
+/************************************
+ * todo:
+ *  mq with signal
+ *
+ ************************************/
+
 #include "signal.h"
 
 void * util::process_msg(void *args) {
@@ -597,6 +603,9 @@ int util::test_mq(const char *name) {
         return -1;
     }
     else if(pid == 0) {
+        
+        return util::test_mq_with_signal(name);
+
         sleep(1);
         unsigned int msg_prio = 1;
         struct mq_attr attr;
@@ -637,6 +646,48 @@ int util::test_mq(const char *name) {
     return 0;
 }
 
+int util::test_mq_with_signal(const char *name) {
+     mqd_t mqd = mq_open(name, O_RDONLY | O_NONBLOCK);
+    if(mqd == -1) {
+        perror("mq_open fail");
+        return -1;
+    }
+    struct mq_attr attr;
+    if(mq_getattr(mqd, &attr) == -1) {
+        perror("mq_getattr fail");
+        return -1;
+    }
+    
+    char *buff = (char *)malloc(attr.mq_msgsize);
+    if(buff == NULL) {
+        perror("malloc fail");
+        return -1;
+    }
+    memset(buff, 0, attr.mq_msgsize);
+
+    sigset_t newmask;
+    sigaddset(&newmask, SIGUSR1);
+    sigprocmask(SIG_BLOCK, &newmask, NULL);
+    
+    struct sigevent sigev;
+    sigev.sigev_notify = SIGEV_SIGNAL;
+    sigev.sigev_signo = SIGUSR1;
+
+    mq_notify(mqd, &sigev);
+    
+    int signo = 0;
+    while(true) {
+        sigwait(&newmask, &signo);
+        if(signo == SIGUSR1) {
+            mq_notify(mqd, &sigev);
+            while((mq_receive(mqd, buff, attr.mq_msgsize, NULL)) >= 0) {
+                std::cout<<buff;
+            }
+        }
+    }
+
+    return 0;
+}
 int main(int argc, char *argv[]) {
     return util::test_mq("/mq.dat"); 
     std::cout<<"errno = "<<errno<<std::endl;
