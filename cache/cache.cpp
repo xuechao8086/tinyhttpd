@@ -3,6 +3,7 @@
   > Author: charliezhao 
   > Mail: 
   > Created Time: Tue 17 Nov 2015 01:05:06 AM PST
+  > Memo: cache_t.ptr no pre alloc, no reusage, find why?
  ************************************************************************/
 
 #include "cache.h"

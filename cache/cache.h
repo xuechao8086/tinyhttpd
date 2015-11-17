@@ -16,11 +16,13 @@
 #include <pthread.h>
 
 #include <iostream>
+extern int cache_error;
 
 typedef int cache_constructor_t(void *obj, void *notused1, void *notused2);
 
 typedef void cache_destructor_t(void *obj, void *notused);
 
+// note: no pre allocator right now.
 typedef struct {
     pthread_mutex_t mutex;
 
