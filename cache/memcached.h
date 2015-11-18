@@ -18,10 +18,10 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include "protocol_binary.h"
+//#include "protocol_binary.h"
 #include "cached.h"
 
-#include "sasl_defs.h"
+//#include "sasl_defs.h"
 
 /** Maximum length of a key. */
 #define KEY_MAX_LENGTH 250

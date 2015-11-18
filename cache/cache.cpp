@@ -3,12 +3,11 @@
   > Author: charliezhao 
   > Mail: 
   > Created Time: Tue 17 Nov 2015 01:05:06 AM PST
-  > Memo: cache_t.ptr no pre alloc, no reusage, find why?
  ************************************************************************/
 
 #include "cache.h"
 
-const uint64_t redzone_pattern = 0xdeadbeefcafebabe;
+const uint64_t redzone_pattern = 0x1111111111111111;
 int cache_error = 0;
 
 const int initial_pool_size = 64;
@@ -82,7 +81,7 @@ void * cache_alloc(cache_t *cache) {
     if(object != NULL) {
         uint64_t *pre = (uint64_t *)ret;
         *pre = redzone_pattern;
-        ret +=  1;
+        ret = pre + 1;
         memcpy(((char *)ret)+cache->bufsize-(2*sizeof(redzone_pattern)),
                 &redzone_pattern, sizeof(redzone_pattern));
     }
@@ -112,7 +111,6 @@ void cache_free(cache_t *cache, void *ptr) {
     if (cache->freecurr < cache->freetotal) {
         cache->ptr[cache->freecurr++] = ptr;
     } else {
-        /* try to enlarge free connections array */
         size_t newtotal = cache->freetotal * 2;
         void **new_free = (void **)realloc(cache->ptr, sizeof(char *) * newtotal);
         if (new_free) {
@@ -139,6 +137,14 @@ int main(int argc, char **argv) {
     memcpy(ptr, (const void *)"hello, from charlie", 100);
     std::cout<<"ptr = "<<(char *)ptr;
     std::cout<<std::endl;
+    std::cout<<std::flush;
+
+    cache_free(ret, ptr);
+    std::cout<<"cache_free ok"<<std::endl;
+    std::cout<<std::flush;
+
+    cache_destroy(ret);
+    std::cout<<"cache_destroy ok"<<std::endl;
     std::cout<<std::flush;
     return 0;
 }
