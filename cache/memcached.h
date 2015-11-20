@@ -11,12 +11,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <stdint.h>
+#include <unistd.h>
 
 typedef unsigned int rel_time_t;
 
 #include "conf.h"
-#include "slab.h"
 #include "item.h"
+#include "slab.h"
 #endif

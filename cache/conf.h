@@ -60,7 +60,6 @@ struct settings {
 };
 
 
-struct settings settings;
 
 void settings_init(void);
 

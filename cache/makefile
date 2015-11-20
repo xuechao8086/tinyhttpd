@@ -1,7 +1,7 @@
 CC=g++
-#CPPFLAGS=-Wall -O0 -std=c++11 -ggdb
-CPPFLAGS=-O0 -std=c++11 -ggdb
-OBJ=daemon
+CPPFLAGS=-Wall -O0 -std=c++11 -ggdb
+#CPPFLAGS=-O0 -std=c++11 -ggdb
+OBJ=daemon slab item
 
 daemon: daemon.cpp
 	${CC} ${CPPFLAGS} daemon.cpp -o daemon

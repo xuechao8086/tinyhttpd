@@ -29,6 +29,9 @@ static void *memory_allocate(size_t size);
 static void split_slab_page_into_freelist(void *ptr, const unsigned int id);
 static void do_slabs_free(void *ptr, const size_t size, unsigned int id);
 
+extern struct settings settings;
+
+
 unsigned int slabs_clsid(const size_t size) {
     int res = POWER_SMALLEST;
     if (size == 0) {
@@ -127,7 +130,7 @@ static int grow_slab_list (const unsigned int id) {
     slabclass_t *p = &slabclass[id];
     if (p->slabs == p->list_size) {
         size_t new_size =  (p->list_size != 0) ? p->list_size * 2 : 16;
-        void *new_list = realloc(p->slab_list, new_size * sizeof(void *));
+        void **new_list = (void **)realloc(p->slab_list, new_size * sizeof(void *));
         if (new_list == 0) return 0;
         p->list_size = new_size;
         p->slab_list = new_list;
@@ -176,7 +179,7 @@ static void do_slabs_free(void *ptr, const size_t size, unsigned int id) {
     it->it_flags |= ITEM_SLABBED;
     it->slabs_clsid = 0;
     it->prev = 0;
-    it->next = p->slots;
+    it->next = (item *)p->slots;
     if (it->next) it->next->prev = it;
     p->slots = it;
     p->sl_curr++;
@@ -186,6 +189,9 @@ static void do_slabs_free(void *ptr, const size_t size, unsigned int id) {
 
 int main(int argc, char **argv) {
     settings_init();
+    slabs_init(1<<29, 2, true);    
+    
+    sleep(600);
     return 0;
 
 }

@@ -15,6 +15,16 @@
 
 #define CHUNK_ALIGN_BYTES 8
 
+#define ITEM_LINKED 1
+#define ITEM_CAS 2
+
+/* temp, unused */
+#define ITEM_SLABBED 4
+/* Item was fetched at least once in its lifetime */
+#define ITEM_FETCHED 8
+/* Appended on fetch, removed on LRU shuffling */
+#define ITEM_ACTIVE 16
+
 unsigned int slabs_clsid(const size_t size);
 
 void slabs_init(const size_t limit, const double factor, const bool prealloc);

@@ -7,6 +7,8 @@
 
 #include "memcached.h"
 
+struct settings settings;
+
 void settings_init(void) {
     settings.use_cas = true;
     settings.access = 0700;
