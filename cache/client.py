@@ -18,16 +18,21 @@ def usage():
     sys.exit(-1)
 
 if __name__ == '__main__':
-    mc = memcache.Client(['127.0.0.1:11211'], debug=True, socket_timeout=3600)
+    mc = memcache.Client(['127.0.0.1:11211'], debug=True, socket_timeout=3600, cdebug=True)
     choice = ("charliezhao", "tingtingzhang", "alisionzhang", 
             "xuechaozhao", "advance programming in UNIX Program", "UNIX network programming")
     if len(sys.argv) == 1: 
         name = choice[int(random.random()*10000)%6] 
-        mc.set("name", name)
-        print "info: memcache set ok"
+        ret = mc.set("person", name)
+        #print("ret = {}".format(ret))
+        if ret:
+            print "info: memcache set ok"
+        else:
+            print "info: memcache set fail"
+        
         # time.sleep(60)
-        value = mc.get("name")
-        print "name={}".format(value)
+        value = mc.get("person")
+        print "person={}".format(value)
         print "info: memcache get ok"
     elif sys.argv[1] == "-h":
         usage()

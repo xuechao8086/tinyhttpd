@@ -16,6 +16,7 @@
 #include <pthread.h>
 
 #include <iostream>
+
 extern int cache_error;
 
 typedef int cache_constructor_t(void *obj, void *notused1, void *notused2);
