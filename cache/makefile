@@ -17,15 +17,18 @@ util:util.cpp
 item:item.cpp
 	${CC} ${CPPFLAGS} item.cpp -lpthread  -o item
 
-slab: conf.o slab.o
-	${CC} ${CPPFLAGS} conf.o slab.o -o slab
+slab: conf.o slab.o assoc.o jenkins_hash.o
+	${CC} ${CPPFLAGS} conf.o slab.o assoc.o jenkins_hash.o -o slab
 
 conf.o:conf.cpp
 	${CC} ${CPPFLAGS} -c conf.cpp -o conf.o
 slab.o:slab.cpp
 	${CC} ${CPPFLAGS} -c slab.cpp -o slab.o
-
-
+assoc.o:assoc.cpp
+	${CC} ${CPPFLAGS} -c assoc.cpp -o assoc.o
+jenkins_hash.o:jenkins_hash.cpp
+	${CC} ${CPPFLAGS} -c jenkins_hash.cpp -o jenkins_hash.o
+	
 
 clean:
 	rm -rf *.o

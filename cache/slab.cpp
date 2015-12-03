@@ -245,22 +245,36 @@ void slabs_free(void *ptr, size_t size, unsigned int id) {
 
 void slabs_alloc_test(void) {
     unsigned int total_chunk = 0;
+    
+    const char *key = "charliezhao";
+    size_t nkey = strlen(key) + 1;
+    item *ptr = (item *)slabs_alloc(1024, slabs_clsid(1024), &total_chunk);
+    strcpy(ITEM_key(ptr), key);   
+    ptr->nkey = nkey;
+    strcpy(ITEM_data(ptr), "xuechaozhao");
+    uint32_t hv = jenkins_hash(key, strlen(key));
+    assoc_insert(ptr, hv);
+
     for(int i = 0; i <= 10922; ++i) {
         void *ptr = slabs_alloc(96, slabs_clsid(96), &total_chunk);
         if(ptr == NULL) {
             fprintf(stderr, "i: %7d slabs_alloc fail\n", 
                     i);
-            return; 
+            break;
         }
         else {
             slabs_free(ptr, 96, slabs_clsid(96)); 
         }
     }
+
+    item *ptr2 = assoc_find(key, nkey, hv);
+    fprintf(stdout, "key:%20s value:%20s\n", ITEM_key(ptr2), ITEM_data(ptr2)); 
 }
 
 int main(int argc, char **argv) {
     settings_init();
     slabs_init(1<<29, 2, true);    
+    assoc_init(0); 
     slabs_info();  
     slabs_alloc_test();
     slabs_info();

@@ -437,7 +437,8 @@ uint32_t jenkins_hash( const void *key, size_t length)
 #error Must define HASH_BIG_ENDIAN or HASH_LITTLE_ENDIAN
 #endif /* HASH_XXX_ENDIAN == 1 */
 
-int main(int argc, char **argv) {
+#ifdef JENKINS_HASH_TEST 
+int main(int argc, char **argv) { 
     const char *list[10] = {
         "zhangxuechao",
         "tingtingzhang",
@@ -459,3 +460,4 @@ int main(int argc, char **argv) {
     }
     return 0;    
 }
+#endif

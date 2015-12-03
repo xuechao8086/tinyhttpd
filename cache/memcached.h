@@ -22,4 +22,5 @@ typedef unsigned int rel_time_t;
 #include "item.h"
 #include "slab.h"
 #include "assoc.h"
+#include "jenkins_hash.h"
 #endif

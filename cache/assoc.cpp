@@ -1,6 +1,6 @@
 /*************************************************************************
 	> File Name: assoc.cpp
-	> Author: 
+	> Author: charliezhao 
 	> Mail: 
 	> Created Time: Wed 02 Dec 2015 07:26:14 PM PST
  ************************************************************************/
@@ -13,7 +13,7 @@ void assoc_init(const int hashpower_init) {
     if(hashpower_init) {
         hashpower = hashpower_init;
     }
-    iprimary_hashtable = calloc(hashsize(hashpower)*sizeof(void *));
+    primary_hashtable = (item **)calloc(hashsize(hashpower), sizeof(void *));
     if(! primary_hashtable) {
         fprintf(stderr, "Failed to init hashtable.\n");
         return; 
@@ -40,5 +40,13 @@ item *assoc_find(const char *key, const size_t nkey, const uint32_t hv) {
 }
 
 void assoc_delete(const char *key, const size_t nkey, const uint32_t hv) {
-
+    item *it = primary_hashtable[hv&hashmask(hashpower)];
+    while(it) {
+        if((nkey == it->nkey) && (memcmp(key, ITEM_key(it), nkey) == 0)) {
+            primary_hashtable[hv&hashmask(hashpower)] = it->h_next;
+            it->h_next = NULL;
+            break;
+        }
+        it = it->h_next;
+    }
 }

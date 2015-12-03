@@ -5,8 +5,8 @@
 	> Created Time: Wed 02 Dec 2015 07:21:38 PM PST
  ************************************************************************/
 
-#ifndef _ASSOC_H
-#define _ASSOC_H
+#ifndef ASSOC_H
+#define ASSOC_H
 
 #define HASHPOWER_DEFAULT 16
 #define hashsize(n) ((uint64_t)1<<n)
