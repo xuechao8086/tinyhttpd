@@ -13,10 +13,13 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
 
 typedef unsigned int rel_time_t;
 
 #include "conf.h"
 #include "item.h"
 #include "slab.h"
+#include "assoc.h"
 #endif
