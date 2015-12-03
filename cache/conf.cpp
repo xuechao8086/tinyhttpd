@@ -18,7 +18,7 @@ void settings_init(void) {
     settings.inter = NULL;
     settings.maxbytes = 64 * 1024 * 1024; /* default is 64MB */
     settings.maxconns = 1024;         /* to limit connections-related memory to about 5MB */
-    settings.verbose = 0;
+    settings.verbose = 2;
     settings.oldest_live = 0;
     settings.oldest_cas = 0;          /* supplements accuracy of oldest_live */
     settings.evict_to_free = 1;       /* push old items out of cache when memory runs out */

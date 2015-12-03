@@ -1,6 +1,6 @@
 /*************************************************************************
 	> File Name: slab.h
-	> Author: 
+	> Author: charliezhao 
 	> Mail: 
 	> Created Time: Wed 18 Nov 2015 02:32:58 AM PST
  ************************************************************************/
@@ -33,8 +33,8 @@ void slabs_free(void *ptr, size_t size, unsigned int id);
 
 
 typedef struct {
-        unsigned int size;      /* sizes of items */
-        unsigned int perslab;   /* how many items per slab */
+        uint32_t size;      /* sizes of items */
+        uint32_t perslab;   /* how many items per slab */
 
         void *slots;           /* list of item ptrs */
         unsigned int sl_curr;   /* total free items in list */
@@ -48,4 +48,5 @@ typedef struct {
         size_t requested; /* The number of requested bytes */
 } slabclass_t;
 
+void slabs_alloc_test(void);
 #endif

@@ -1,5 +1,6 @@
 CC=g++
-CPPFLAGS=-Wall -O0 -std=c++11 -ggdb
+CPPFLAGS=-O0 -std=c++11 -ggdb
+#CPPFLAGS=-Wall -O0 -std=c++11 -ggdb
 #CPPFLAGS=-O0 -std=c++11 -ggdb
 OBJ=daemon slab item
 

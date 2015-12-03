@@ -28,9 +28,12 @@ static int grow_slab_list (const unsigned int id);
 static void *memory_allocate(size_t size);
 static void split_slab_page_into_freelist(void *ptr, const unsigned int id);
 static void do_slabs_free(void *ptr, const size_t size, unsigned int id);
+static void *do_slabs_alloc(const size_t size, unsigned int id, unsigned int *total_chunks);
+
+/* charliezhao add */
+static void slabs_info(void);
 
 extern struct settings settings;
-
 
 unsigned int slabs_clsid(const size_t size) {
     int res = POWER_SMALLEST;
@@ -46,8 +49,7 @@ unsigned int slabs_clsid(const size_t size) {
 }
 
 
-void slabs_init(const size_t limit, const double factor, const bool prealloc) {
-    
+void slabs_init(const size_t limit, const double factor, const bool prealloc=true) {
     mem_limit = limit;
     if (prealloc) {
         mem_base = malloc(mem_limit);
@@ -74,7 +76,7 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc) {
         slabclass[i].perslab = settings.item_size_max / slabclass[i].size;
         size *= factor;
         if (settings.verbose > 1) {
-            fprintf(stderr, "slab class %3d: chunk size %9u perslab %7u\n",
+            fprintf(stderr, "slab class %3d: chunk size %9u perslab %7u \n",
                    i, slabclass[i].size, slabclass[i].perslab);
         }
     }
@@ -90,6 +92,24 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc) {
     if (prealloc) {
         slabs_preallocate(power_largest);
     }
+}
+
+static void slabs_info(void) {
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\n");
+    for(int32_t i = 1; i <= power_largest; ++i) {
+        // to be done 
+        item *ptr = (item *) slabclass[i].slots;
+        uint32_t cnt = 0;
+        while(ptr != NULL) {
+            ptr = ptr->next;
+            ++cnt; 
+        }
+        if(settings.verbose > 1) {
+            fprintf(stderr, "slab class %3d: item cnt: %7u\n",
+                    i, cnt);
+        }
+    }        
 }
 
 static void slabs_preallocate(const unsigned int maxslabs) {
@@ -164,7 +184,7 @@ static void *memory_allocate(size_t size) {
 
 static void split_slab_page_into_freelist(void *ptr, const unsigned int id) {
     slabclass_t *p = &slabclass[id];
-    for (int x = 0; x < p->perslab; x++) {
+    for (uint32_t x = 0; x < p->perslab; x++) {
         do_slabs_free(ptr, 0, id);
         ptr += p->size;
     }
@@ -176,9 +196,10 @@ static void do_slabs_free(void *ptr, const size_t size, unsigned int id) {
     slabclass_t *p = &slabclass[id];
     
     item *it = (item *)ptr;
+    
+    it->nbytes = size;
     it->it_flags |= ITEM_SLABBED;
-    it->slabs_clsid = 0;
-    it->prev = 0;
+
     it->next = (item *)p->slots;
     if (it->next) it->next->prev = it;
     p->slots = it;
@@ -187,11 +208,62 @@ static void do_slabs_free(void *ptr, const size_t size, unsigned int id) {
     return;
 }
 
+void *slabs_alloc(size_t size, unsigned int id, unsigned int *total_chunk) {
+    void * ret = do_slabs_alloc(size, id, total_chunk);
+    return ret;
+}
+
+static void *do_slabs_alloc(const size_t size, unsigned int id, unsigned int *total_chunks) {
+    void *ret = NULL;
+    if(id < POWER_SMALLEST || id > power_largest) {
+        fprintf(stderr, "slabs_alloc fail\n");
+        return NULL;
+    }
+    slabclass_t *p = &slabclass[id];
+    *total_chunks = p->slabs * p->perslab; // not used right now by charliezhao
+    if(p->sl_curr != 0) {
+        item *it = (item *)p->slots;
+        assert(it!=NULL);
+        p->slots = it->next;
+        if(it->next) {
+            it->next->prev = NULL;
+        }
+        it->it_flags &= ~ITEM_SLABBED;
+        ++it->refcount; 
+        --p->sl_curr;
+        ret = (void *)it;
+    }
+    if(ret) {
+        p->requested += size;
+    }
+    return ret;
+}
+
+void slabs_free(void *ptr, size_t size, unsigned int id) {
+    do_slabs_free(ptr, size, id); 
+}
+
+void slabs_alloc_test(void) {
+    unsigned int total_chunk = 0;
+    for(int i = 0; i <= 10922; ++i) {
+        void *ptr = slabs_alloc(96, slabs_clsid(96), &total_chunk);
+        if(ptr == NULL) {
+            fprintf(stderr, "i: %7d slabs_alloc fail\n", 
+                    i);
+            return; 
+        }
+        else {
+            slabs_free(ptr, 96, slabs_clsid(96)); 
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     settings_init();
     slabs_init(1<<29, 2, true);    
-    
+    slabs_info();  
+    slabs_alloc_test();
+    slabs_info();
     sleep(600);
     return 0;
-
 }
