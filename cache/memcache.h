@@ -8,13 +8,21 @@
 #ifndef _MEMCACHED_H
 #define _MEMCACHED_H
 
+#include <assert.h>
+#include <errno.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <unistd.h>
-#include <errno.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/signal.h>
+#include <sys/resource.h>
+#include <time.h>
+#include <unistd.h>
 
 typedef unsigned int rel_time_t;
 
@@ -23,4 +31,5 @@ typedef unsigned int rel_time_t;
 #include "slab.h"
 #include "assoc.h"
 #include "jenkins_hash.h"
+#include "test.h"
 #endif

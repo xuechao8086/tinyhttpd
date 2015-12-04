@@ -17,7 +17,6 @@
 
 #define ITEM_LINKED 1
 #define ITEM_CAS 2
-
 /* temp, unused */
 #define ITEM_SLABBED 4
 /* Item was fetched at least once in its lifetime */
@@ -31,6 +30,7 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc);
 void *slabs_alloc(const size_t size, unsigned int id, unsigned int *total_chunks);
 void slabs_free(void *ptr, size_t size, unsigned int id);
 
+void slabs_info(void);
 
 typedef struct {
         uint32_t size;      /* sizes of items */

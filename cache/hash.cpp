@@ -4,7 +4,7 @@
 	> Mail: 
 	> Created Time: Tue 17 Nov 2015 06:20:39 PM PST
  ************************************************************************/
-#include "memcached.h"
+#include "memcache.h"
 #include "jenkins_hash.h"
 #include "murmur3_hash.h"
 

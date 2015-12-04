@@ -5,7 +5,7 @@
 	> Created Time: Wed 02 Dec 2015 07:26:14 PM PST
  ************************************************************************/
 
-#include "memcached.h"
+#include "memcache.h"
 unsigned int hashpower = HASHPOWER_DEFAULT;
 static item** primary_hashtable = 0;
 

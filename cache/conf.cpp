@@ -5,7 +5,7 @@
 	> Created Time: Fri 20 Nov 2015 04:02:49 AM PST
  ************************************************************************/
 
-#include "memcached.h"
+#include "memcache.h"
 
 struct settings settings;
 

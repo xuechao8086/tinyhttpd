@@ -9,7 +9,7 @@
  *       or commercial.  It's free."
  *
  */
-//#include "memcached.h"
+//#include "memcache.h"
 #include "jenkins_hash.h"
 
 /*

@@ -4,7 +4,7 @@
 	> Mail: 
 	> Created Time: Fri 20 Nov 2015 02:25:46 AM PST
  ************************************************************************/
-#include "memcached.h"
+#include "memcache.h"
 
 static slabclass_t slabclass[MAX_NUMBER_OF_SLAB_CLASSES];
 static size_t mem_limit = 0;
@@ -29,9 +29,6 @@ static void *memory_allocate(size_t size);
 static void split_slab_page_into_freelist(void *ptr, const unsigned int id);
 static void do_slabs_free(void *ptr, const size_t size, unsigned int id);
 static void *do_slabs_alloc(const size_t size, unsigned int id, unsigned int *total_chunks);
-
-/* charliezhao add */
-static void slabs_info(void);
 
 extern struct settings settings;
 
@@ -94,7 +91,7 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc=tru
     }
 }
 
-static void slabs_info(void) {
+void slabs_info(void) {
     fprintf(stderr, "\n");
     fprintf(stderr, "\n");
     for(int32_t i = 1; i <= power_largest; ++i) {
@@ -243,41 +240,5 @@ void slabs_free(void *ptr, size_t size, unsigned int id) {
     do_slabs_free(ptr, size, id); 
 }
 
-void slabs_alloc_test(void) {
-    unsigned int total_chunk = 0;
-    
-    const char *key = "charliezhao";
-    size_t nkey = strlen(key) + 1;
-    item *ptr = (item *)slabs_alloc(1024, slabs_clsid(1024), &total_chunk);
-    strcpy(ITEM_key(ptr), key);   
-    ptr->nkey = nkey;
-    strcpy(ITEM_data(ptr), "xuechaozhao");
-    uint32_t hv = jenkins_hash(key, strlen(key));
-    assoc_insert(ptr, hv);
 
-    for(int i = 0; i <= 10922; ++i) {
-        void *ptr = slabs_alloc(96, slabs_clsid(96), &total_chunk);
-        if(ptr == NULL) {
-            fprintf(stderr, "i: %7d slabs_alloc fail\n", 
-                    i);
-            break;
-        }
-        else {
-            slabs_free(ptr, 96, slabs_clsid(96)); 
-        }
-    }
 
-    item *ptr2 = assoc_find(key, nkey, hv);
-    fprintf(stdout, "key:%20s value:%20s\n", ITEM_key(ptr2), ITEM_data(ptr2)); 
-}
-
-int main(int argc, char **argv) {
-    settings_init();
-    slabs_init(1<<29, 2, true);    
-    assoc_init(0); 
-    slabs_info();  
-    slabs_alloc_test();
-    slabs_info();
-    sleep(600);
-    return 0;
-}
