@@ -47,49 +47,25 @@ static int make_socket_non_blocking(int sfd) {
     return 0;
 }
 
-int get_line2(int sock, char *buf, int size) {
-    int i = 0;
-    char c = '\0';
-    int n = 0;
-    while(i < size - 1) {
-        n = recv(sock, &c, 1, 0);
-        if (-1 == n && errno == EAGAIN) {
-            continue; 
-        } 
-        else if(n > 0){
-            if (c == '\0') {
-                buf[i++] = c;
-                break;
-            }
-            else if(c == '\r') {
-                buf[i++] = '\0';
-                break;
-            }
-            else if(c == '\n') {
-                buf[i++] = '\0';
-                break;
-            }
-            else {
-                buf[i++] = c;
-            }
-        }
-        else {
-            buf[i++] = '\0';
-        }
-    }
-    if(buf[0] = '\0') {
-        return -1;
-    }
-    else {
-        return 0;
-    }    
-}
 
 int get_line(int sock, char *buf, int size)
 {
     int i = 0;
     char c = '\0';
-    int n;
+    int n =  recv(sock, buf, size, 0);
+    if(n == -1) {
+        return -1;
+    }
+    else if(n == 0) {
+        return -1;
+    }
+    for(int i = 0; i < n; ++i) {
+        if(*(buf+i) == '\r' || *(buf+i) == '\n') {
+            *(buf+i) = '\0';
+        }
+    }
+    fprintf(stdout, "buf=%s\n", buf);
+    return 0; 
 
     while ((i < size - 1) && (c != '\n'))
     {
@@ -102,24 +78,16 @@ int get_line(int sock, char *buf, int size)
         }
         else if (n > 0)
         {
-            if (c == '\r')
+            if (c == '\r' || c == '\n')
             {
-                n = recv(sock, &c, 1, MSG_PEEK);
-                /* DEBUG printf("%02X\n", c); */
-                if ((n > 0) && (c == '\n')){
-                    recv(sock, &c, 1, 0);
-                }
-                else {
-                    c = '\n';
-                }
+                buf[i++] = '\0'; 
             }
             buf[i++] = c;
         }
         else {
-            c = '\n'; 
+            break;
         }
     }
-    buf[i] = '\0';
     return 0; 
 }
 
@@ -136,6 +104,9 @@ int main(int argc, char **argv) {
     settings_init();
     slabs_init(1<<29, 2, true);    
     assoc_init(0); 
+
+    pthread_t lru;
+    int err = pthread_create(&lru, NULL, lru_traverse, NULL);
 
     struct sockaddr_in cliaddr;
     int server_sock = startup(settings.port);
@@ -169,19 +140,33 @@ int main(int argc, char **argv) {
                                          (struct sockaddr *)&cliaddr,
                                          &cli_len);
                 if(client_sock == -1) {
-                    if(errno == EAGAIN) {
+                    if(errno == EAGAIN || errno == EWOULDBLOCK) {
                         break;
                     }
                 }
-                make_socket_non_blocking(client_sock);
                 event.data.fd = client_sock;
                 event.events = EPOLLIN;
-                epoll_ctl(eventfd, EPOLL_CTL_ADD, client_sock, &event);
+                if(epoll_ctl(eventfd, EPOLL_CTL_ADD, client_sock, &event) < 0) {
+                    fprintf(stderr, "epoll_ctl fail");
+                    abort(); 
+                }
+                make_socket_non_blocking(client_sock);
+
+                char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
+                
+                int s = getnameinfo((struct sockaddr *)&cliaddr, cli_len,
+                                    hbuf, sizeof(hbuf),
+                                    sbuf, sizeof(sbuf),
+                                    NI_NUMERICHOST | NI_NUMERICSERV);
+                if(s == 0) {
+                    fprintf(stdout, "accepted connection on descriptor %d(host=%s port=%s)\n", 
+                            client_sock, hbuf, sbuf);
+                }    
             }
             else {
                 char buf[1024];
                 memset(buf, 0, 1024); 
-                if(get_line2(events[i].data.fd, buf, 1024) < 0) {
+                if(get_line(events[i].data.fd, buf, 1024) < 0) {
                    epoll_ctl(eventfd, EPOLL_CTL_DEL, events[i].data.fd, &events[i]); 
                    close(events[i].data.fd);
                 }
@@ -252,6 +237,8 @@ int main(int argc, char **argv) {
             }
         }
     }
+
+    pthread_join(lru, NULL);
     sleep(600);
     return 0;
 }

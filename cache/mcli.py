@@ -25,7 +25,7 @@ class MemcacheTestCli(object):
         while True:
             key = "k{}".format(random.randint(1, 19860903))
             value = "v{}".format(random.randint(1, 19860903))
-            cmd = "set {} {}\n\0".format(key, value)
+            cmd = "set {} {}\n".format(key, value)
             
             try:
                 self.s.sendall(cmd)
@@ -33,7 +33,6 @@ class MemcacheTestCli(object):
                 print(self.s.recv(1024)) 
             except:
                 print("\033[31m set fail\033[0m")
-                break
 
             time.sleep(1)
 

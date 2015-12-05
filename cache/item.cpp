@@ -144,6 +144,22 @@ void do_item_remove(item *it) {
     }
 }
 
+void *lru_traverse(void *args){
+    sleep(10);
+    while(true) {
+        for(int i = 0; i < LARGEST_ID; ++i) {
+            item *p = heads[i];
+            int cnt = 0;
+            while(p) {
+                fprintf(stdout, "lru_traverse %d key:%s value:%s\n",
+                        cnt++, ITEM_key(p), ITEM_data(p));
+                p=p->next; 
+            }
+        }
+        sleep(60);
+    }
+    return NULL;
+}
 
 #ifdef ITEM_TEST
 int main(int argc, char **argv) {

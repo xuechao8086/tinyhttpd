@@ -79,4 +79,6 @@ void item_free(item *it);
 void item_link(item *it);
 void item_unlink(item *it);
 
+void *lru_traverse(void *args);
+
 #endif
