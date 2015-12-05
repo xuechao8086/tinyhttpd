@@ -16,7 +16,7 @@ int item_test() {
         sprintf(key, "charlie_%d", i);
         const size_t nkey = strlen(key) + 1;
         const int flags = 0;
-        const rel_time_t exptime = 0;
+        const time_t exptime = 0;
         const int nbytes = 1024; 
         uint32_t cur_hv = jenkins_hash((void *)key, nkey);
         item *it = do_item_alloc(key, nkey, flags, exptime, nbytes, cur_hv);
@@ -26,7 +26,6 @@ int item_test() {
             break; 
         }
         memcpy(ITEM_data(it), (void *)&i, sizeof(int));
-        assoc_insert(it, cur_hv); 
     }
     
     //test get.

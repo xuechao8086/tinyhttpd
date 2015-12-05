@@ -9,6 +9,8 @@
 extern struct settings settings;
 static int make_socket_non_blocking(int sfd);
 
+volatile time_t current_time;
+
 int startup(int port) {
     int httpd = socket(AF_INET, SOCK_STREAM, 0);
     if(httpd == -1) {
@@ -52,12 +54,19 @@ int get_line2(int sock, char *buf, int size) {
     while(i < size - 1) {
         n = recv(sock, &c, 1, 0);
         if (-1 == n && errno == EAGAIN) {
-            return -1;
+            continue; 
         } 
         else if(n > 0){
-            if(c == '\r') {
+            if (c == '\0') {
+                buf[i++] = c;
+                break;
+            }
+            else if(c == '\r') {
                 buf[i++] = '\0';
-                recv(sock, &c, 1, 0);
+                break;
+            }
+            else if(c == '\n') {
+                buf[i++] = '\0';
                 break;
             }
             else {
@@ -68,7 +77,12 @@ int get_line2(int sock, char *buf, int size) {
             buf[i++] = '\0';
         }
     }
-    return 0;
+    if(buf[0] = '\0') {
+        return -1;
+    }
+    else {
+        return 0;
+    }    
 }
 
 int get_line(int sock, char *buf, int size)
@@ -118,18 +132,11 @@ int accept_request(int client) {
     sync();
 }
 
-int tokenize(char *buf, cmd *c) {
-    if(strncmp(buf, "get", 4) == 0) {
-        const char *key = buf+4;
-    }    
-
-    return 0;
-}
 int main(int argc, char **argv) {
     settings_init();
     slabs_init(1<<29, 2, true);    
     assoc_init(0); 
-   
+
     struct sockaddr_in cliaddr;
     int server_sock = startup(settings.port);
     if(server_sock < 0) {
@@ -150,8 +157,7 @@ int main(int argc, char **argv) {
         int n = epoll_wait(eventfd, events, MAXEVENTS, -1);
         for(int i = 0; i < n; i++) {
             if((events[i].events&EPOLLERR) ||
-               (events[i].events&EPOLLHUP) ||
-               (!events[i].events&EPOLLIN)) {
+               (events[i].events&EPOLLHUP)) {
                    fprintf(stderr, "epoll error");
                    epoll_ctl(eventfd, EPOLL_CTL_DEL, events[i].data.fd, &events[i]); 
                    close(events[i].data.fd);
@@ -217,7 +223,7 @@ int main(int argc, char **argv) {
                         
                         const size_t nkey = strlen(key) + 1;
                         const int flags = 0;
-                        const rel_time_t exptime = 0;
+                        const time_t exptime = 0;
                         const int nbytes = 120;
                         uint32_t cur_hv = jenkins_hash((void *)key, nkey);
                         item *it = do_item_alloc(key, nkey, flags, exptime, nbytes, cur_hv);
@@ -230,7 +236,7 @@ int main(int argc, char **argv) {
                             continue; 
                         }
                         memcpy(ITEM_data(it), value, strlen(value)+1);
-                        assoc_insert(it, cur_hv);
+                        
                         size_t rlen = sprintf(buf, "<\033[32mset ok, key:%s value:%s\033[0m\n", key, value);
                         if(send(events[i].data.fd, buf, rlen+1, 0) < 0)
                         {

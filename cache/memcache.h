@@ -31,13 +31,6 @@
 #include <time.h>
 #include <unistd.h>
 
-typedef unsigned int rel_time_t;
-typedef struct _cmd {
-    int op;
-    char *key;
-    size_t nkey;
-} cmd;
-
 #include "conf.h"
 #include "item.h"
 #include "slab.h"
@@ -52,6 +45,5 @@ int startup(int port);
 int get_line(int sock, char *buf, int size);
 int get_line2(int sock, char *buf, int size);
 int accept_request(int client);
-int tokenize(char *buf, cmd *c);
 
 #endif

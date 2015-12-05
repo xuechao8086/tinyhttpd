@@ -12,8 +12,8 @@ typedef struct _stritem {
     struct _stritem *next;
     struct _stritem *prev;
     struct _stritem *h_next;
-    rel_time_t time;
-    rel_time_t exptime;
+    time_t time;
+    time_t exptime; /* how long this can be */
     size_t nbytes;
     uint8_t refcount;
     uint8_t nsuffix;
@@ -65,15 +65,18 @@ uint64_t get_cas_id(void);
 // nbytes  number of bytes to hold value,
 // suffix  buffer for flags nbytes
 // return total size of the header
+
 item *do_item_alloc(char *key, const size_t nkey, 
                     const int flags, 
-                    const rel_time_t exptime, 
+                    const time_t exptime, 
                     const int nbytes, 
                     const uint32_t cur_hv);
+int do_item_link(item *it, const uint32_t hv);
+void do_item_unlink(item *it, const uint32_t hv);
+void do_item_remove(item *it);
 
 void item_free(item *it);
-
-item *do_item_get(const char *key, const size_t nkey, const uint32_t hv);
-item *do_item_touch(const char *key, const size_t nkey, uint32_t exptime, const uint32_t hv);
+void item_link(item *it);
+void item_unlink(item *it);
 
 #endif

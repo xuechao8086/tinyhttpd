@@ -16,6 +16,7 @@
 #define CHUNK_ALIGN_BYTES 8
 
 #define ITEM_LINKED 1
+/* use cas */
 #define ITEM_CAS 2
 /* temp, unused */
 #define ITEM_SLABBED 4

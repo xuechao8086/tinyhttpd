@@ -41,12 +41,20 @@ item *assoc_find(const char *key, const size_t nkey, const uint32_t hv) {
 
 void assoc_delete(const char *key, const size_t nkey, const uint32_t hv) {
     item *it = primary_hashtable[hv&hashmask(hashpower)];
+    
+    item *prev = it;
     while(it) {
         if((nkey == it->nkey) && (memcmp(key, ITEM_key(it), nkey) == 0)) {
-            primary_hashtable[hv&hashmask(hashpower)] = it->h_next;
+            if(prev==it) {
+                prev = it->h_next; 
+            }
+            else {
+                prev->h_next = it->h_next;
+            }
             it->h_next = NULL;
             break;
         }
+        prev = it;
         it = it->h_next;
     }
 }
