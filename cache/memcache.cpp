@@ -1,7 +1,7 @@
 /*************************************************************************
-	> File Name: main.cpp
-	> Author: charliezhao 
-	> Mail: 
+	> File Name:    main.cpp
+	> Author:       charliezhao 
+	> Mail:         xuechao8086@126.com 
 	> Created Time: Thu 03 Dec 2015 05:59:19 PM PST
  ************************************************************************/
 
@@ -104,6 +104,11 @@ int main(int argc, char **argv) {
     settings_init();
     slabs_init(1<<29, 2, true);    
     assoc_init(0); 
+
+    slabs_info();
+    item_test();
+    
+    return 0;
 
     pthread_t lru;
     int err = pthread_create(&lru, NULL, lru_traverse, NULL);
@@ -237,7 +242,7 @@ int main(int argc, char **argv) {
             }
         }
     }
-
+    free(events);
     pthread_join(lru, NULL);
     sleep(600);
     return 0;

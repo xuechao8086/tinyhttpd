@@ -87,6 +87,7 @@ int do_item_link(item *it, const uint32_t hv) {
     ++it->refcount;
 }
 
+/* it not right here */
 void item_link(item *it) {
     item **head = &heads[it->slabs_clsid];
     item **tail = &tails[it->slabs_clsid];
@@ -96,6 +97,9 @@ void item_link(item *it) {
 
     it->prev = NULL;
     it->next = *head;
+    if(it->next) {
+        it->next->prev = it;
+    } 
     *head = it;
     if(*tail == NULL) {
         *tail = it;
@@ -117,7 +121,7 @@ void item_unlink(item *it) {
 
     if(*head == it) {
        assert(it->prev == NULL);
-        *head = it->next;
+       *head = it->next;
     }
     if(*tail == it) {
         assert(it->next == NULL);
@@ -133,6 +137,8 @@ void item_unlink(item *it) {
     if(it->prev) {
         it->prev->next = it->next;
     }
+    it->prev = NULL;
+    it->next = NULL;
 }
 
 void do_item_remove(item *it) {
@@ -145,7 +151,6 @@ void do_item_remove(item *it) {
 }
 
 void *lru_traverse(void *args){
-    sleep(10);
     while(true) {
         for(int i = 0; i < LARGEST_ID; ++i) {
             item *p = heads[i];
@@ -156,7 +161,8 @@ void *lru_traverse(void *args){
                 p=p->next; 
             }
         }
-        sleep(60);
+        // sleep(60);
+        break;
     }
     return NULL;
 }

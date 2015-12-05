@@ -10,7 +10,7 @@ int item_test() {
     int maxi = 0; 
     
     //test set.
-    for(int i = 0; i < 1024; i++) {
+    for(int i = 0; i < 10; i++) {
         char key[1024];
         memset(key, 0, 1024);
         sprintf(key, "charlie_%d", i);
@@ -25,11 +25,13 @@ int item_test() {
             maxi = i;
             break; 
         }
-        memcpy(ITEM_data(it), (void *)&i, sizeof(int));
+        char val[1024];
+        sprintf(val, "%d", i);
+        memcpy(ITEM_data(it), (void *)&val, strlen(val)+1);
     }
     
     //test get.
-    for(int i = 0; i < maxi; ++i) {
+    for(int i = 0; i < 10; ++i) {
         char key[1024];
         memset(key, 0, 1024);
         sprintf(key, "charlie_%d", i); 
@@ -42,10 +44,12 @@ int item_test() {
         }
         int val = 0;
         memcpy((void *)&val, ITEM_data(it), sizeof(val));
-        // fprintf(stdout, "key:%s value:%d\n", ITEM_key(it), val);
         if(i&0x1) {
-            item_free(it); 
+            fprintf(stdout, "del key:%s value:%d\n", ITEM_key(it), val);
+            do_item_unlink(it, cur_hv); 
+            lru_traverse(NULL);
         }
+        
     }
     return 0;
 }
