@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <sys/signal.h>
 #include <sys/resource.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -40,11 +41,33 @@
 #include "test.h"
 
 #define MAXEVENTS 1024
+#define DATA_BUFFER_SIZE 2048
 
+typedef struct conn conn;
+struct conn {
+    int sfd;
+    char   *rbuf;   /** buffer to read commands into */
+    char   *rcurr;  /** but if we parsed some already, this is where we stopped */
+    int    rsize;   /** total allocated size of rbuf */
+    int    rbytes;  /** how much data, starting from rcur, do we have unparsed */
+
+    char *wbuf;
+    char *wcurr;
+    int wsize;
+    int wbytes;
+    conn *next;
+};
+
+enum try_read_result {
+    READ_DATA_RECEIVED,
+    READ_NO_DATA_RECEIVED,
+    READ_ERROR,            /** an error occurred (on the socket) (or client closed connection) */
+    READ_MEMORY_ERROR      /** failed to allocate more memory */
+};
 
 int startup(int port);
 int get_line(int sock, char *buf, int size);
-int get_line2(int sock, char *buf, int size);
-int accept_request(int client);
+
+
 
 #endif

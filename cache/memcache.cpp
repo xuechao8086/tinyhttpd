@@ -6,10 +6,20 @@
  ************************************************************************/
 
 #include "memcache.h"
+
 extern struct settings settings;
 static int make_socket_non_blocking(int sfd);
 
 volatile time_t current_time;
+static int max_fds;
+
+int event_fd = 0;
+conn **conns;
+static void conn_init(void);
+static conn *conn_new(const int sfd, const int read_buffer_size);
+static void conn_cleanup(conn *c);
+
+static enum try_read_result try_read_network(conn *c);
 
 int startup(int port) {
     int httpd = socket(AF_INET, SOCK_STREAM, 0);
@@ -91,27 +101,146 @@ int get_line(int sock, char *buf, int size)
     return 0; 
 }
 
+static void conn_init(void) {
+    int headroom = 10;
+    max_fds = settings.maxconns + headroom;
 
-int accept_request(int client) {
-    char buf[1024];
-    memset(buf, 0, 1024);
-    get_line(client, buf, 1024); 
-    fprintf(stdout, "%s", buf);
-    sync();
+    struct rlimit rl;
+    if(getrlimit(RLIMIT_NOFILE, &rl) == 0) {
+        max_fds = rl.rlim_max;
+    }
+    else {
+        fprintf(stderr, "Failed to query maximum file descriptor; "
+                        "falling back to maxconns\n");
+    }
+    conns = (conn **)calloc(max_fds, sizeof(conn *));
+
+    if(conns == NULL) {
+        fprintf(stderr, "Failed to allocate connection structures\n");
+        exit(1);
+    }
 }
+
+static conn *conn_new(const int sfd, const int read_buffer_size) {
+    conn *c = conns[sfd];
+    if(NULL == c) {
+        if (!(c = (conn *)calloc(1, sizeof(conn)))) {
+            fprintf(stderr, "Failed to allocate connection object\n");
+            return NULL;
+        }
+    }
+
+    c->rbuf = c->wbuf = 0;
+    c->rsize = read_buffer_size;
+    c->wsize = DATA_BUFFER_SIZE;
+    c->rbuf = (char *)malloc((size_t)c->rsize);
+    c->wbuf = (char *)malloc((size_t)c->wsize);
+    c->rbytes = c->wbytes = 0;
+    c->rcurr = c->rbuf;
+    c->wcurr = c->wbuf;
+
+    if (c->rbuf == 0 || c->wbuf == 0 ) {
+        fprintf(stderr, "Failed to allocate buffers for connection\n");
+        free(c);
+        return NULL; 
+    }
+
+    c->sfd = sfd;
+    conns[sfd] = c;
+   
+    struct epoll_event event;
+    event.data.fd = sfd;
+    event.events = EPOLLIN;
+    if(epoll_ctl(event_fd, EPOLL_CTL_ADD, sfd, &event) < 0) {
+        fprintf(stderr, "epoll_ctl fail");
+        free(c->rbuf);
+        free(c->wbuf);
+        free(c);
+        return NULL;
+    }
+    return c;
+}
+
+static void conn_cleanup(conn *c) {
+    if(c != NULL) {
+        if(c->rbuf != NULL) {
+            free(c->rbuf);
+        }
+        if(c->wbuf != NULL) {
+            free(c->wbuf);
+        }
+        struct epoll_event event;
+        event.data.fd = c->sfd;
+        event.events = EPOLLIN;
+        if(epoll_ctl(event_fd, EPOLL_CTL_DEL, c->sfd, &event) < 0) {
+            fprintf(stdout, "epoll_ctl fail");
+        }
+        close(c->sfd);
+
+        fprintf(stdout, "close connnection on %d\n", c->sfd);
+    } 
+}
+
+static enum try_read_result try_read_network(conn *c) {
+    assert(c != NULL);
+    enum try_read_result gotdata = READ_NO_DATA_RECEIVED;
+
+    if(c->rcurr != c->rbuf) {
+        if((c->rbytes != 0)) {
+            memmove(c->rbuf, c->rcurr, c->rbytes);
+        }
+        c->rcurr = c->rbuf;
+    }
+    
+    int num_allocs = 0;
+    while(true) {
+        if(c->rbytes >= c->rsize) {
+            if(num_allocs == 2) {
+                return gotdata; 
+            }
+            ++num_allocs;
+            char *new_rbuf = (char *)realloc(c->rbuf, c->rsize*2);
+            if(!new_rbuf) {
+                fprintf(stderr, "Couldn't realloc input buffer\n");
+                return READ_MEMORY_ERROR;
+            }
+            c->rcurr = c->rbuf = new_rbuf;
+            c->rsize *= 2;
+        }
+        int avail = c->rsize - c->rbytes;
+        int res = read(c->sfd, c->rbuf+c->rbytes, avail);
+ 
+        if(res > 0) {
+            gotdata = READ_DATA_RECEIVED;
+            c->rbytes += res;
+
+            if(res == avail) {continue;}
+            else { break; } 
+        }
+        else if(res == 0) {
+            return READ_ERROR;
+        }
+        else if(res == -1) {
+            if(errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+            return READ_ERROR;
+        }
+    }
+    fprintf(stdout, "buf = %s\n", c->rbuf);
+    return gotdata; 
+}
+
 
 int main(int argc, char **argv) {
     settings_init();
     slabs_init(1<<29, 2, true);    
     assoc_init(0); 
+    conn_init();
 
-    slabs_info();
-    item_test();
-    
-    return 0;
-
-    pthread_t lru;
-    int err = pthread_create(&lru, NULL, lru_traverse, NULL);
+    // item_test();
+    // pthread_t lru;
+    // int err = pthread_create(&lru, NULL, lru_traverse, NULL);
 
     struct sockaddr_in cliaddr;
     int server_sock = startup(settings.port);
@@ -120,23 +249,22 @@ int main(int argc, char **argv) {
     }
     make_socket_non_blocking(server_sock);
     
-    int eventfd = epoll_create1(0); 
+    event_fd = epoll_create1(0); 
     
     struct epoll_event event;
     event.data.fd = server_sock;
     event.events = EPOLLIN;
-    epoll_ctl(eventfd, EPOLL_CTL_ADD, server_sock, &event);
+    epoll_ctl(event_fd, EPOLL_CTL_ADD, server_sock, &event);
     
     struct epoll_event *events = (struct epoll_event *)calloc(MAXEVENTS, sizeof(epoll_event));
     
     while(true) {
-        int n = epoll_wait(eventfd, events, MAXEVENTS, -1);
+        int n = epoll_wait(event_fd, events, MAXEVENTS, -1);
         for(int i = 0; i < n; i++) {
             if((events[i].events&EPOLLERR) ||
                (events[i].events&EPOLLHUP)) {
                    fprintf(stderr, "epoll error");
-                   epoll_ctl(eventfd, EPOLL_CTL_DEL, events[i].data.fd, &events[i]); 
-                   close(events[i].data.fd);
+                   conn_cleanup(conns[events[i].data.fd]); 
                    break; 
                }
             else if (server_sock == events[i].data.fd) {
@@ -149,13 +277,12 @@ int main(int argc, char **argv) {
                         break;
                     }
                 }
-                event.data.fd = client_sock;
-                event.events = EPOLLIN;
-                if(epoll_ctl(eventfd, EPOLL_CTL_ADD, client_sock, &event) < 0) {
-                    fprintf(stderr, "epoll_ctl fail");
-                    abort(); 
-                }
+                
                 make_socket_non_blocking(client_sock);
+                conn *c = conn_new(client_sock, 1024);
+                if(c == NULL) {
+                    break;
+                } 
 
                 char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
                 
@@ -169,81 +296,18 @@ int main(int argc, char **argv) {
                 }    
             }
             else {
-                char buf[1024];
-                memset(buf, 0, 1024); 
-                if(get_line(events[i].data.fd, buf, 1024) < 0) {
-                   epoll_ctl(eventfd, EPOLL_CTL_DEL, events[i].data.fd, &events[i]); 
-                   close(events[i].data.fd);
+                conn *c = conns[events[i].data.fd];
+                if(try_read_network(c) != READ_DATA_RECEIVED) {
+                    conn_cleanup(c);
+                    continue; 
                 }
-                else {
-                    char key[1024] = {"\0"};
-                    char value[1024] = {"\0"};
+                process_request(conn *c);
 
-                    // fprintf(stdout, "%s\n", buf); 
-                    // continue;
-                    if(strncmp(buf, "get ", 4) == 0) {
-                        strcpy(key, buf+4); 
-                        // fprintf(stdout, ">get key:%s\n", key);
-                        const size_t nkey = strlen(key) + 1;
-                        uint32_t cur_hv = jenkins_hash((void *)key, nkey);
-                        item *it = assoc_find(key, nkey, cur_hv);
-                        if(it == NULL) {
-                            fprintf(stderr, "<\033[31mget fail\033[0m\n");
-                            size_t rlen = sprintf(buf, "<\033[31mget fail\033[0m\n");
-                            if(send(events[i].data.fd, buf, rlen+1, 0) < 0) {
-                                fprintf(stdout, "<\033[32msend fail\033[0m\n");
-                            } 
-                            continue;
-                        }
-                        // fprintf(stdout, "<\033[32mget ok, %s %s\033[0m\n", ITEM_key(it), ITEM_data(it));
-                        size_t rlen = sprintf(buf, "<\033[32mget ok, key:%s value:%s\033[0m\n", ITEM_key(it), ITEM_data(it));
-                        if(send(events[i].data.fd, buf, rlen+1, 0) < 0) {
-                            fprintf(stderr, "<\033[31msend fail\033[0m\n");
-                        }
-                    }
-                    else if(strncmp(buf, "set ", 4) == 0) { 
-                        int offset = 4;
-                        for(char *obj=key, *src=buf+offset; 
-                            *src != ' '; 
-                            *obj++=*src++, ++offset);
-
-                        strcpy(value, buf+offset);
-                        
-                        // fprintf(stdout, ">set key:%s value:%s\n", key, value); 
-                        
-                        const size_t nkey = strlen(key) + 1;
-                        const int flags = 0;
-                        const time_t exptime = 0;
-                        const int nbytes = 120;
-                        uint32_t cur_hv = jenkins_hash((void *)key, nkey);
-                        item *it = do_item_alloc(key, nkey, flags, exptime, nbytes, cur_hv);
-                        if(it == NULL) {
-                            fprintf(stderr, "<\033[31set fail\033[0m\n");
-                            size_t rlen = sprintf(buf, "<\033[31set fail\033[0m\n");
-                            if(send(events[i].data.fd, buf, rlen+1, 0) < 0) {
-                                fprintf(stderr, "<\033[31msend fail\033[0m\n");
-                            }
-                            continue; 
-                        }
-                        memcpy(ITEM_data(it), value, strlen(value)+1);
-                        
-                        size_t rlen = sprintf(buf, "<\033[32mset ok, key:%s value:%s\033[0m\n", key, value);
-                        if(send(events[i].data.fd, buf, rlen+1, 0) < 0)
-                        {
-                            fprintf(stdout, "<\033[32msend fail\033[0m\n");
-                        }
-
-                    }
-                    else {
-                        fprintf(stdout, "<%s ,format error, ignore!\n", buf);
-                    }
-
-                }
             }
         }
     }
     free(events);
-    pthread_join(lru, NULL);
+    // pthread_join(lru, NULL);
     sleep(600);
     return 0;
 }
