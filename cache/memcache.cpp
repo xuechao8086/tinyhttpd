@@ -21,7 +21,11 @@ static conn *conn_new(const int sfd, const int read_buffer_size);
 static void conn_cleanup(conn *c);
 
 static enum try_read_result try_read_network(conn *c);
+
 static int process_request(conn *c);
+static int process_request_get(conn *c, const char *key, size_t nkey);
+static int process_request_set(conn *c, const char *key, size_t nkey,
+                               const char *val, size_t nval);
 
 static int startup(int port) {
     int httpd = socket(AF_INET, SOCK_STREAM, 0);
@@ -137,7 +141,9 @@ static void conn_cleanup(conn *c) {
         }
         close(c->sfd);
 
-        fprintf(stdout, "close connnection on %d\n", c->sfd);
+        fprintf(stdout, "%s:%d %s close connnection on %d\n", 
+                __FILE__, __LINE__, __func__,
+                c->sfd);
     } 
 }
 
@@ -188,11 +194,9 @@ static enum try_read_result try_read_network(conn *c) {
         }
     }
     if(settings.verbose > 1) {
-        fprintf(stdout, "%s:%d %s buf = %s\n",
-                __FILE__,
-                __LINE__,
-                __func__,
-                c->rbuf);
+        // fprintf(stdout, "%s:%d %s buf = %s\n",
+        //         __FILE__, __LINE__, __func__,
+        //         c->rbuf);
     }
     return gotdata; 
 }
@@ -218,7 +222,7 @@ static int process_request(conn *c) {
             i = 0;
             if(buf[0] != '\0') {
                 if(settings.verbose > 1) {
-                    fprintf(stdout, "%s:%d %s buf = %s\n",__FILE__, __LINE__, __func__, buf);
+                    // fprintf(stdout, "%s:%d %s buf = %s\n",__FILE__, __LINE__, __func__, buf);
                 }
                 
                 char *token[10];
@@ -232,10 +236,10 @@ static int process_request(conn *c) {
                 
                 int maxtoken = k;
                 for(int l = 0; l < maxtoken; ++l) {
-                    fprintf(stdout, "%s\n", token[l]);
+                    // fprintf(stdout, "%s\n", token[l]);
                 }
                 
-                if(strncmp(token[0], "get ", 4) == 0) {
+                if(strncmp(token[0], "get", 3) == 0) {
                     // process get
                     if(maxtoken < 2) {
                         fprintf(stderr, "%s:%d %s buf = %s\n", __FILE__, __LINE__, __func__, buf);
@@ -244,11 +248,13 @@ static int process_request(conn *c) {
                         const char *key = token[1];
                         size_t nkey = strlen(key);
                         if(settings.verbose > 1) {
-                            fprintf(stdout, "key:%s\n", key);
+                            fprintf(stdout, "%s:%d %s cmd:%s key:%s\n", 
+                                    __FILE__, __LINE__, __func__, 
+                                    token[0], key);
                         }
                     } 
                 }
-                else if(strncmp(token[0], "set ", 4) == 0) {
+                else if(strncmp(token[0], "set", 3) == 0) {
                     // process set
                     if(maxtoken < 3) {
                         fprintf(stderr, "%s:%d %s buf = %s\n", __FILE__, __LINE__, __func__, buf);
@@ -259,12 +265,16 @@ static int process_request(conn *c) {
                         const char *val = token[2];
                         size_t nval = strlen(val);
                         if(settings.verbose > 1) {
-                            fprintf(stdout, "key:%s value:%s\n", key, val);
+                            fprintf(stdout, "%s:%d %s cmd:%s key:%s value:%s\n", 
+                                    __FILE__, __LINE__, __func__,
+                                    token[0], key, val);
                         }
                     }
                 } 
                 else {
-                    fprintf(stderr, "%s:%d %s buf = %s, format error", __FILE__, __LINE__, __func__, buf);
+                    fprintf(stderr, "%s:%d %s buf = %s, format error", 
+                            __FILE__, __LINE__, __func__, 
+                            buf);
                 }
             } 
         }
@@ -279,6 +289,17 @@ static int process_request(conn *c) {
     c->rbytes -= maxpoint;
     return 0;
 }
+
+static int process_request_get(conn *c, const char *key, size_t nkey) {
+    return 0;
+}
+
+static int process_request_set(conn *c, const char *key, size_t nkey,
+                               const char *val, size_t nval)
+{ 
+    return 0;
+}
+
 
 int main(int argc, char **argv) {
     settings_init();
@@ -340,7 +361,8 @@ int main(int argc, char **argv) {
                                     sbuf, sizeof(sbuf),
                                     NI_NUMERICHOST | NI_NUMERICSERV);
                 if(s == 0) {
-                    fprintf(stdout, "accepted connection on descriptor %d(host=%s port=%s)\n", 
+                    fprintf(stdout, "%s:%d %s accepted connection on descriptor %d(host=%s port=%s)\n", 
+                            __FILE__, __LINE__, __func__,
                             client_sock, hbuf, sbuf);
                 }    
             }

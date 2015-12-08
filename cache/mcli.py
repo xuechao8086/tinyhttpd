@@ -52,8 +52,9 @@ class MemcacheTestCli(object):
             #       random.randint(1, 100),
             #       random.randint(1, 100))
             
-            cmd = "set {}; get {};".format(random.randint(1, 100),
-                                           random.randint(1, 100));
+            cmd = "set {}k {}v; get k{};".format(random.randint(1, 100),
+                                                 random.randint(1, 100),
+                                                 random.randint(1, 100));
             try:
                 print(cmd)
                 self.s.sendall(cmd)
