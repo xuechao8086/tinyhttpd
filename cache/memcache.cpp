@@ -12,6 +12,7 @@ static int make_socket_non_blocking(int sfd);
 
 volatile time_t current_time;
 static int max_fds;
+static int startup(int port);
 
 int event_fd = 0;
 conn **conns;
@@ -20,8 +21,9 @@ static conn *conn_new(const int sfd, const int read_buffer_size);
 static void conn_cleanup(conn *c);
 
 static enum try_read_result try_read_network(conn *c);
+static int process_request(conn *c);
 
-int startup(int port) {
+static int startup(int port) {
     int httpd = socket(AF_INET, SOCK_STREAM, 0);
     if(httpd == -1) {
         return -1; 
@@ -38,7 +40,7 @@ int startup(int port) {
     if(bind(httpd, (struct sockaddr *)&name, sizeof(name)) < 0) {
         return -1;
     }
-    if(listen(httpd, SOMAXCONN) < 0) {
+    if(listen(httpd, settings.backlog) < 0) {
         return -1;
     }
     return httpd;
@@ -55,50 +57,6 @@ static int make_socket_non_blocking(int sfd) {
         return -1;
     }
     return 0;
-}
-
-
-int get_line(int sock, char *buf, int size)
-{
-    int i = 0;
-    char c = '\0';
-    int n =  recv(sock, buf, size, 0);
-    if(n == -1) {
-        return -1;
-    }
-    else if(n == 0) {
-        return -1;
-    }
-    for(int i = 0; i < n; ++i) {
-        if(*(buf+i) == '\r' || *(buf+i) == '\n') {
-            *(buf+i) = '\0';
-        }
-    }
-    fprintf(stdout, "buf=%s\n", buf);
-    return 0; 
-
-    while ((i < size - 1) && (c != '\n'))
-    {
-        n = recv(sock, &c, 1, 0);
-
-        //which kinds of characters can get here?
-        if (-1 == n && errno == EAGAIN){
-            // fprintf(stderr, "never be here?\n");
-            return -1; 
-        }
-        else if (n > 0)
-        {
-            if (c == '\r' || c == '\n')
-            {
-                buf[i++] = '\0'; 
-            }
-            buf[i++] = c;
-        }
-        else {
-            break;
-        }
-    }
-    return 0; 
 }
 
 static void conn_init(void) {
@@ -149,6 +107,7 @@ static conn *conn_new(const int sfd, const int read_buffer_size) {
     conns[sfd] = c;
    
     struct epoll_event event;
+    memset((void *)&event, 0, sizeof(event));
     event.data.fd = sfd;
     event.events = EPOLLIN;
     if(epoll_ctl(event_fd, EPOLL_CTL_ADD, sfd, &event) < 0) {
@@ -170,6 +129,7 @@ static void conn_cleanup(conn *c) {
             free(c->wbuf);
         }
         struct epoll_event event;
+        memset((void *)&event, 0, sizeof(event)); 
         event.data.fd = c->sfd;
         event.events = EPOLLIN;
         if(epoll_ctl(event_fd, EPOLL_CTL_DEL, c->sfd, &event) < 0) {
@@ -227,10 +187,98 @@ static enum try_read_result try_read_network(conn *c) {
             return READ_ERROR;
         }
     }
-    fprintf(stdout, "buf = %s\n", c->rbuf);
+    if(settings.verbose > 1) {
+        fprintf(stdout, "%s:%d %s buf = %s\n",
+                __FILE__,
+                __LINE__,
+                __func__,
+                c->rbuf);
+    }
     return gotdata; 
 }
 
+static int process_request(conn *c) {
+    assert(c != NULL);
+
+    char *beg = c->rcurr;
+    char *pos = c->rcurr;
+    
+    char buf[1024] = {"\0"};
+
+    int i = 0;
+    int j = 0;
+    int maxpoint = 0;
+    while(j < c->rbytes ) {
+        if(*pos == ';') {
+            strncpy(buf, c->rcurr, i);
+            buf[i] = '\0';
+            strip_blank(buf, i);
+            c->rcurr = pos + 1;
+            maxpoint += i+1;
+            i = 0;
+            if(buf[0] != '\0') {
+                if(settings.verbose > 1) {
+                    fprintf(stdout, "%s:%d %s buf = %s\n",__FILE__, __LINE__, __func__, buf);
+                }
+                
+                char *token[10];
+                memset((void *)token, 0, sizeof(char *));
+                int k = 0;
+                char *tp = buf; 
+                while((token[k] = strtok(tp, " ")) != NULL) {
+                    ++k;
+                    tp = NULL;
+                }
+                
+                int maxtoken = k;
+                for(int l = 0; l < maxtoken; ++l) {
+                    fprintf(stdout, "%s\n", token[l]);
+                }
+                
+                if(strncmp(token[0], "get ", 4) == 0) {
+                    // process get
+                    if(maxtoken < 2) {
+                        fprintf(stderr, "%s:%d %s buf = %s\n", __FILE__, __LINE__, __func__, buf);
+                    }
+                    else {
+                        const char *key = token[1];
+                        size_t nkey = strlen(key);
+                        if(settings.verbose > 1) {
+                            fprintf(stdout, "key:%s\n", key);
+                        }
+                    } 
+                }
+                else if(strncmp(token[0], "set ", 4) == 0) {
+                    // process set
+                    if(maxtoken < 3) {
+                        fprintf(stderr, "%s:%d %s buf = %s\n", __FILE__, __LINE__, __func__, buf);
+                    }
+                    else {
+                        const char *key = token[1];
+                        size_t nkey = strlen(key);
+                        const char *val = token[2];
+                        size_t nval = strlen(val);
+                        if(settings.verbose > 1) {
+                            fprintf(stdout, "key:%s value:%s\n", key, val);
+                        }
+                    }
+                } 
+                else {
+                    fprintf(stderr, "%s:%d %s buf = %s, format error", __FILE__, __LINE__, __func__, buf);
+                }
+            } 
+        }
+        else {
+            ++i;
+        }
+        
+        ++pos;
+        ++j;
+    }
+    
+    c->rbytes -= maxpoint;
+    return 0;
+}
 
 int main(int argc, char **argv) {
     settings_init();
@@ -252,6 +300,7 @@ int main(int argc, char **argv) {
     event_fd = epoll_create1(0); 
     
     struct epoll_event event;
+    memset((void *)&event, 0, sizeof(event)); 
     event.data.fd = server_sock;
     event.events = EPOLLIN;
     epoll_ctl(event_fd, EPOLL_CTL_ADD, server_sock, &event);
@@ -301,8 +350,7 @@ int main(int argc, char **argv) {
                     conn_cleanup(c);
                     continue; 
                 }
-                process_request(conn *c);
-
+                process_request(c);
             }
         }
     }

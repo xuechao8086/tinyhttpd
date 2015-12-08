@@ -51,4 +51,6 @@ void vperror(const char *fmt, ...)
 
 //added by charlie
 int err(const char *msg);
+
+int strip_blank(char *buf, int len);
 #endif

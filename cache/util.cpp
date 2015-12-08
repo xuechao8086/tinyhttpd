@@ -136,8 +136,41 @@ int err(const char *msg){
     exit(0);
 }
 
+int strip_blank(char *buf, int len) {
+    if(len == 1) {
+        buf[0] = '\0'; 
+        return 0;
+    } 
 
-int main(int argc, char **argv) {
+    int end = len - 1; 
+    char *p = buf + end;
+    while((*p == ' ') && (end >= 0)) {
+        --end;
+        --p;
+    }
+    if(end == 0) {
+        buf[0] = '\0';
+        return 0;
+    }
+    
+    int beg = 0;
+    p = buf;
+    
+    while((*p == ' ') && (beg < end)) {
+        ++beg;
+        ++p;
+    }
+    if((end != len - 1) || (beg != 0)) {
+        int i = 0;
+        for(int j = beg; j <= end; ++j) {
+            buf[i++] = buf[j];
+        }
+        buf[i] = '\0';
+    } 
+    return 0;
+}
+#ifdef _UTIL_TEST 
+int main(int argc, char **argv) { 
     const char *str = "19860903";
     uint64_t val1 = 0;
     int64_t val2 = 0;
@@ -155,5 +188,5 @@ int main(int argc, char **argv) {
     std::cout<<"val4 = "<<val4<<std::endl;
 
     return 0;
-    
 }
+#endif

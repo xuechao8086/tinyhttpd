@@ -167,7 +167,7 @@ void *lru_traverse(void *args){
     return NULL;
 }
 
-#ifdef ITEM_TEST
+#ifdef _ITEM_TEST
 int main(int argc, char **argv) {
     settings.use_cas = true;
     return 0;

@@ -17,9 +17,10 @@ OBJ=daemon slab item cache memcache
 #item:item.cpp
 #	${CC} ${CPPFLAGS} item.cpp -lpthread  -o item
 
-all: conf.o slab.o assoc.o jenkins_hash.o memcache.o item.o test.o
-	${CC} ${CPPFLAGS} conf.o slab.o assoc.o jenkins_hash.o memcache.o item.o test.o -lpthread \
-		  -o memcache
+all: conf.o slab.o assoc.o jenkins_hash.o memcache.o item.o test.o util.o
+	${CC} ${CPPFLAGS} conf.o slab.o assoc.o jenkins_hash.o memcache.o item.o test.o  util.o \
+					  -lpthread \
+		  			  -o memcache
 
 conf.o:conf.cpp
 	${CC} ${CPPFLAGS} -c conf.cpp -o conf.o
@@ -35,6 +36,8 @@ memcache.o:memcache.cpp
 	${CC} ${CPPFLAGS} -c memcache.cpp -o memcache.o
 test.o: test.cpp
 	${CC} ${CPPFLAGS} -c test.cpp -o test.o
+util.o: util.cpp
+	${CC} ${CPPFLAGS} -c util.cpp -o util.o
 
 clean:
 	rm -rf *.o

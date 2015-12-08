@@ -39,6 +39,7 @@
 #include "assoc.h"
 #include "jenkins_hash.h"
 #include "test.h"
+#include "util.h"
 
 #define MAXEVENTS 1024
 #define DATA_BUFFER_SIZE 2048
@@ -64,10 +65,5 @@ enum try_read_result {
     READ_ERROR,            /** an error occurred (on the socket) (or client closed connection) */
     READ_MEMORY_ERROR      /** failed to allocate more memory */
 };
-
-int startup(int port);
-int get_line(int sock, char *buf, int size);
-
-
 
 #endif
