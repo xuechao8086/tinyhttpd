@@ -66,7 +66,7 @@ uint64_t get_cas_id(void);
 // suffix  buffer for flags nbytes
 // return total size of the header
 
-item *do_item_alloc(char *key, const size_t nkey, 
+item *do_item_alloc(const char *key, const size_t nkey, 
                     const int flags, 
                     const time_t exptime, 
                     const int nbytes, 

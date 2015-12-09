@@ -46,11 +46,14 @@
 
 typedef struct conn conn;
 struct conn {
-    int sfd;
-    char   *rbuf;   /** buffer to read commands into */
-    char   *rcurr;  /** but if we parsed some already, this is where we stopped */
-    int    rsize;   /** total allocated size of rbuf */
-    int    rbytes;  /** how much data, starting from rcur, do we have unparsed */
+    int sfd; /* server fd */
+    char cip[NI_MAXHOST]; /* client ip */
+    char cport[NI_MAXSERV]; /* client port */
+
+    char   *rbuf;   /* buffer to read commands into */
+    char   *rcurr;  /* but if we parsed some already, this is where we stopped */
+    int    rsize;   /* total allocated size of rbuf */
+    int    rbytes;  /* how much data, starting from rcur, do we have unparsed */
 
     char *wbuf;
     char *wcurr;

@@ -30,7 +30,7 @@ static size_t item_make_header(const uint8_t nkey, const int flags, const int nb
 
 
 
-item *do_item_alloc(char *key, const size_t nkey, const int flags,
+item *do_item_alloc(const char *key, const size_t nkey, const int flags,
                     const time_t exptime, const int nbytes,
                     const uint32_t cur_hv) 
 {

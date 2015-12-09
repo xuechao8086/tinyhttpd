@@ -19,7 +19,7 @@ int item_test() {
         const time_t exptime = 0;
         const int nbytes = 1024; 
         uint32_t cur_hv = jenkins_hash((void *)key, nkey);
-        item *it = do_item_alloc(key, nkey, flags, exptime, nbytes, cur_hv);
+        item *it = do_item_alloc((const char *)key, nkey, flags, exptime, nbytes, cur_hv);
         if(it == NULL) {
             fprintf(stderr, "\033[31malloc fail\033[0m");
             maxi = i;

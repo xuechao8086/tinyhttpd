@@ -20,7 +20,7 @@ class MemcacheTestCli(object):
     def __init__(self, ip, port):
         self.ip = ip
         self.port = port 
-
+    
     def test_long(self):
         self.s = socket.socket(socket.AF_INET,
                                socket.SOCK_STREAM) 
@@ -62,6 +62,19 @@ class MemcacheTestCli(object):
                 print("\033[31m set fail\033[0m")
             time.sleep(1) 
 
+    def test_long3(self):
+        self.s = socket.socket(socket.AF_INET,
+                               socket.SOCK_STREAM)
+        self.s.connect((self.ip, self.port))
+        
+        rnd = random.randint(1, 19860903);
+        cmd = "set {}k {}v; get {}k;".format(rnd, rnd, rnd)
+        try:
+            print(cmd)
+            self.s.sendall(cmd)
+        except:
+            print("\033[31m set fail\033[0m")
+
 
     def test_short(self):
         while True:
@@ -80,8 +93,10 @@ class MemcacheTestCli(object):
 
 def usage():
     print("""{} [1-9]
-      1 long connect
-      2 short connect""".format(sys.argv[0]))
+      1 test_long 
+      2 test_short
+      3 test_long2
+      4 test_long3""".format(sys.argv[0]))
     sys.exit()    
 
 
@@ -95,5 +110,7 @@ if __name__ == '__main__':
         m.test_short()
     elif sys.argv[1] == '3':
         m.test_long2()
+    elif sys.argv[1] == '4':
+        m.test_long3()
     else:
         usage()

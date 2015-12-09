@@ -17,15 +17,17 @@ static int startup(int port);
 int event_fd = 0;
 conn **conns;
 static void conn_init(void);
-static conn *conn_new(const int sfd, const int read_buffer_size);
+static conn *conn_new(const int sfd, const int read_buffer_size, 
+                      const char *cip, size_t ncip,
+                      const char *cport, size_t ncport);
 static void conn_cleanup(conn *c);
 
 static enum try_read_result try_read_network(conn *c);
 
 static int process_request(conn *c);
-static int process_request_get(conn *c, const char *key, size_t nkey);
+static item * process_request_get(conn *c, const char *key, size_t nkey);
 static int process_request_set(conn *c, const char *key, size_t nkey,
-                               const char *val, size_t nval);
+                               const char *val, size_t nval, int exptime);
 
 static int startup(int port) {
     int httpd = socket(AF_INET, SOCK_STREAM, 0);
@@ -83,7 +85,9 @@ static void conn_init(void) {
     }
 }
 
-static conn *conn_new(const int sfd, const int read_buffer_size) {
+static conn *conn_new(const int sfd, const int read_buffer_size, 
+                      const char *cip, size_t ncip,
+                      const char *cport, size_t ncport) {
     conn *c = conns[sfd];
     if(NULL == c) {
         if (!(c = (conn *)calloc(1, sizeof(conn)))) {
@@ -96,7 +100,9 @@ static conn *conn_new(const int sfd, const int read_buffer_size) {
     c->rsize = read_buffer_size;
     c->wsize = DATA_BUFFER_SIZE;
     c->rbuf = (char *)malloc((size_t)c->rsize);
+    memset(c->rbuf, 0, c->rsize);
     c->wbuf = (char *)malloc((size_t)c->wsize);
+    memset(c->wbuf, 0, c->wsize); 
     c->rbytes = c->wbytes = 0;
     c->rcurr = c->rbuf;
     c->wcurr = c->wbuf;
@@ -108,6 +114,14 @@ static conn *conn_new(const int sfd, const int read_buffer_size) {
     }
 
     c->sfd = sfd;
+    memset(c->cip, 0, NI_MAXHOST);
+    strncpy(c->cip, cip, ncip);
+    c->cip[NI_MAXHOST-1] = '\0';   
+
+    memset(c->cport, 0, NI_MAXSERV);
+    strncpy(c->cport, cport, ncport);
+    c->cport[NI_MAXSERV-1] = '\0';    
+
     conns[sfd] = c;
    
     struct epoll_event event;
@@ -141,9 +155,9 @@ static void conn_cleanup(conn *c) {
         }
         close(c->sfd);
 
-        fprintf(stdout, "%s:%d %s close connnection on %d\n", 
+        fprintf(stdout, "%s:%d %s close connnection on %d(%s:%s)\n", 
                 __FILE__, __LINE__, __func__,
-                c->sfd);
+                c->sfd, c->cip, c->cport);
     } 
 }
 
@@ -248,10 +262,20 @@ static int process_request(conn *c) {
                         const char *key = token[1];
                         size_t nkey = strlen(key);
                         if(settings.verbose > 1) {
-                            fprintf(stdout, "%s:%d %s cmd:%s key:%s\n", 
+                        }
+                        item *it = process_request_get(c, key, nkey);
+                        if(it == NULL) {
+                            fprintf(stdout, "%s:%d %s cmd:%s key:%s not found\n", 
                                     __FILE__, __LINE__, __func__, 
                                     token[0], key);
                         }
+                        
+                        if(settings.verbose > 1) {
+                            fprintf(stdout, "%s:%d %s cmd:%s key:%s val:%s ret:0\n",
+                                    __FILE__, __LINE__, __func__,
+                                    token[0], key, ITEM_data(it));
+                        }
+                        
                     } 
                 }
                 else if(strncmp(token[0], "set", 3) == 0) {
@@ -264,10 +288,19 @@ static int process_request(conn *c) {
                         size_t nkey = strlen(key);
                         const char *val = token[2];
                         size_t nval = strlen(val);
-                        if(settings.verbose > 1) {
-                            fprintf(stdout, "%s:%d %s cmd:%s key:%s value:%s\n", 
+
+                        int ret = process_request_set(c, key, nkey, val, nval, 0);
+                        if(ret == 0) {
+                            if(settings.verbose > 1) {
+                                fprintf(stdout, "%s:%d %s cmd:%s key:%s value:%s ret:%d\n", 
                                     __FILE__, __LINE__, __func__,
-                                    token[0], key, val);
+                                    token[0], key, val, ret);
+                            }
+                        }
+                        else {
+                            fprintf(stderr, "%s:%d %s cmd:%s key:%s value:%s ret:%d\n",
+                                    __FILE__, __LINE__, __func__,
+                                    token[0], key, val, ret);
                         }
                     }
                 } 
@@ -290,13 +323,49 @@ static int process_request(conn *c) {
     return 0;
 }
 
-static int process_request_get(conn *c, const char *key, size_t nkey) {
-    return 0;
+static item * process_request_get(conn *c, const char *key, size_t nkey) {
+    uint32_t hv = jenkins_hash((void *)key, nkey);
+    return assoc_find(key, nkey, hv);
 }
 
 static int process_request_set(conn *c, const char *key, size_t nkey,
-                               const char *val, size_t nval)
+                               const char *val, size_t nval, int exptime)
 { 
+    uint32_t hv = jenkins_hash((void *)key, nkey);
+    item *it = assoc_find(key, nkey, hv);
+     
+    int flags = 0; // later consider what's the mean of flags?
+    
+    if(it == NULL) {
+        item *it = do_item_alloc(key, nkey, flags, exptime, nval, hv);
+        if(it == NULL) {
+            return -1; 
+        }
+        memcpy(ITEM_data(it), val, nval);
+        return 0;
+    }    
+    
+    //how to update? 
+    if(it->nbytes == nval) {
+        int ret = memcmp(val, ITEM_data(it), nval);
+        if(ret == 0) {
+            return 0;
+        }
+        memcpy(ITEM_data(it), val, nval);
+    }
+    else if (it->nbytes < nval){
+        do_item_unlink(it, hv);
+        item *it = do_item_alloc(key, nkey, flags, exptime, nval, hv);
+        if(it == NULL) {
+            return -1;
+        }
+        memcpy(ITEM_data(it), val, nval);
+    }
+    else {
+        memset(ITEM_data(it), 0, it->nbytes);
+        memcpy(ITEM_data(it), val, nval);
+    }
+
     return 0;
 }
 
@@ -349,10 +418,6 @@ int main(int argc, char **argv) {
                 }
                 
                 make_socket_non_blocking(client_sock);
-                conn *c = conn_new(client_sock, 1024);
-                if(c == NULL) {
-                    break;
-                } 
 
                 char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
                 
@@ -361,10 +426,15 @@ int main(int argc, char **argv) {
                                     sbuf, sizeof(sbuf),
                                     NI_NUMERICHOST | NI_NUMERICSERV);
                 if(s == 0) {
-                    fprintf(stdout, "%s:%d %s accepted connection on descriptor %d(host=%s port=%s)\n", 
+                    fprintf(stdout, "%s:%d %s accepted connection on descriptor %d(%s:%s)\n", 
                             __FILE__, __LINE__, __func__,
                             client_sock, hbuf, sbuf);
                 }    
+                
+                conn *c = conn_new(client_sock, 1024, hbuf, NI_MAXHOST, sbuf, NI_MAXSERV);
+                if(c == NULL) {
+                    break;
+                } 
             }
             else {
                 conn *c = conns[events[i].data.fd];
