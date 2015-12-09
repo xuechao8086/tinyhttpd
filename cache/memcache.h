@@ -56,9 +56,10 @@ struct conn {
     int    rbytes;  /* how much data, starting from rcur, do we have unparsed */
 
     char *wbuf;
-    char *wcurr;
+    char *wcurr; /* where we write buffer */
     int wsize;
     int wbytes;
+    
     conn *next;
 };
 
@@ -69,4 +70,10 @@ enum try_read_result {
     READ_MEMORY_ERROR      /** failed to allocate more memory */
 };
 
+enum transmit_result {
+    TRANSMIT_COMPLETE,   /** All done writing. */
+    TRANSMIT_INCOMPLETE, /** More data remaining to write. */
+    TRANSMIT_SOFT_ERROR, /** Can't write any more right now. */
+    TRANSMIT_HARD_ERROR  /** Can't write (c->state is set to conn_closing) */
+};
 #endif

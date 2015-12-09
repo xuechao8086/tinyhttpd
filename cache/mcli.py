@@ -68,13 +68,41 @@ class MemcacheTestCli(object):
         self.s.connect((self.ip, self.port))
         
         rnd = random.randint(1, 19860903);
-        cmd = "set {}k {}v; get {}k;".format(rnd, rnd, rnd)
+        cmd = "set {}k {}v; get {}k; set {}k {}{}------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------v;".format(rnd, rnd, rnd, rnd, rnd, rnd)
         try:
             print(cmd)
             self.s.sendall(cmd)
         except:
             print("\033[31m set fail\033[0m")
+        cmd = "get {}k".format(rnd)
+        try:
+            print(cmd)
+            self.s.sendall(cmd)
+        except:
+            print("\033[31m get fail\033[0m")
 
+    def test_long4(self):
+        self.s = socket.socket(socket.AF_INET,
+                               socket.SOCK_STREAM)
+        self.s.connect((self.ip, self.port))
+        
+        rnd = random.randint(1, 19860903);
+    
+        cmd = "set k{} v{};".format(rnd, rnd)
+        try:
+            print(cmd)
+            self.s.sendall(cmd)
+            print(self.s.recv(1024))
+        except:
+            print("\033[31m set fail\033[0m")
+
+        cmd = "get k{};".format(rnd)
+        try:
+            print(cmd)
+            self.s.sendall(cmd)
+            print(self.s.recv(1024))
+        except:
+            print("\033[31m set fail\033[0m")
 
     def test_short(self):
         while True:
@@ -87,16 +115,18 @@ class MemcacheTestCli(object):
             
             try:
                 s.sendall(cmd)
+                print(s.recv(1024))
             except:
                 print("\033[31m set fail\033[0m")
-            time.sleep(0.5)
+            time.sleep(1)
 
 def usage():
     print("""{} [1-9]
       1 test_long 
       2 test_short
       3 test_long2
-      4 test_long3""".format(sys.argv[0]))
+      4 test_long3
+      5 test_long4""".format(sys.argv[0]))
     sys.exit()    
 
 
@@ -112,5 +142,7 @@ if __name__ == '__main__':
         m.test_long2()
     elif sys.argv[1] == '4':
         m.test_long3()
+    elif sys.argv[1] == '5':
+        m.test_long4()
     else:
         usage()

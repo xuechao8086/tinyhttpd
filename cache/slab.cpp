@@ -30,7 +30,7 @@ static void split_slab_page_into_freelist(void *ptr, const unsigned int id);
 static void do_slabs_free(void *ptr, const size_t size, unsigned int id);
 static void *do_slabs_alloc(const size_t size, unsigned int id, unsigned int *total_chunks);
 
-extern struct settings settings;
+extern struct conf settings;
 
 unsigned int slabs_clsid(const size_t size) {
     int res = POWER_SMALLEST;

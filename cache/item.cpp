@@ -6,7 +6,7 @@
  ************************************************************************/
 #include "memcache.h"
 
-extern struct settings settings;
+extern struct conf settings;
 extern time_t current_time;
 
 static item *heads[LARGEST_ID]; // default NULL 

@@ -7,7 +7,7 @@
 
 #include "memcache.h"
 
-struct settings settings;
+struct conf settings;
 
 void settings_init(void) {
     settings.use_cas = true;

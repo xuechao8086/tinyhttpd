@@ -16,7 +16,7 @@ enum protocol {
     negotiating_prot
 };
 
-struct settings {
+struct conf {
     size_t maxbytes;
     int maxconns;
     int port;

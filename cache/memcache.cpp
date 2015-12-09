@@ -7,7 +7,8 @@
 
 #include "memcache.h"
 
-extern struct settings settings;
+extern struct conf settings;
+
 static int make_socket_non_blocking(int sfd);
 
 volatile time_t current_time;
@@ -23,6 +24,8 @@ static conn *conn_new(const int sfd, const int read_buffer_size,
 static void conn_cleanup(conn *c);
 
 static enum try_read_result try_read_network(conn *c);
+static int try_write_network(conn *c);
+static int write_wbuffer(conn *c, const void *ptr, size_t len);
 
 static int process_request(conn *c);
 static item * process_request_get(conn *c, const char *key, size_t nkey);
@@ -215,6 +218,60 @@ static enum try_read_result try_read_network(conn *c) {
     return gotdata; 
 }
 
+static int write_wbuffer(conn *c, const void *ptr, size_t len) {
+    assert(c != NULL);
+    
+    int avail = c->wsize - c->wbytes;
+    int num_allocs = 0; 
+    if(avail > len) {
+        memcpy(c->wcurr, ptr, len);
+        c->wcurr += len;
+        c->wbytes += len;
+    }
+    else {
+        int ret = try_write_network(c);
+        if(ret != 0) {
+            return ret;
+        }
+
+        if(c->wsize < len) {
+            c->wbuf = realloc(c->wbuf, 2*len);
+            memset(c->wbuf, 0, 2*len);
+            c->wcurr = c->wbuf;
+            c->wsize = 2*len;
+            c->wbytes = 0;
+        }
+        memcpy(c->wcurr, ptr, len);
+        c->wcurr += len;
+        c->wbytes += len;
+    }
+    return 0;
+}
+
+static int try_write_network(conn *c) {
+    assert(c != NULL);
+    
+    int cnt = 0;
+    while(cnt < c->wbytes) {
+        int ret = write(c->sfd, c->wbuf+cnt, c->wbytes-cnt);
+        if(ret >= 0) {
+            cnt += ret;
+        } 
+        else {
+            if((errno == EAGAIN) || (errno = EWOULDBLOCK)) {
+                continue;
+            }
+            else {
+                fprintf(stderr, "\033[31mwrite fail\033[0m\n");
+                break;
+            }
+        } 
+    }
+    c->wcurr -= cnt;
+    c->wbytes -= cnt;
+    return 0;
+}
+
 static int process_request(conn *c) {
     assert(c != NULL);
 
@@ -270,12 +327,16 @@ static int process_request(conn *c) {
                                     token[0], key);
                         }
                         
+ 
+                        char r[1024] = {"\0"};
+                        sprintf(r, "%s:%d %s cmd:%s key:%s val:%s ret:0\n",
+                                __FILE__, __LINE__, __func__, 
+                                token[0], key, ITEM_data(it));
                         if(settings.verbose > 1) {
-                            fprintf(stdout, "%s:%d %s cmd:%s key:%s val:%s ret:0\n",
-                                    __FILE__, __LINE__, __func__,
-                                    token[0], key, ITEM_data(it));
+                            fprintf(stdout, "%s", r); 
                         }
-                        
+                        // write_wbuffer(c, r, strlen(r)+1); 
+                        write(c->sfd, r, strlen(r)+1);
                     } 
                 }
                 else if(strncmp(token[0], "set", 3) == 0) {
@@ -290,18 +351,20 @@ static int process_request(conn *c) {
                         size_t nval = strlen(val);
 
                         int ret = process_request_set(c, key, nkey, val, nval, 0);
+                        
+                        char r[1024] = {"\0"};
+                        sprintf(r, "%s:%d %s cmd:%s key:%s value:%s ret:%d\n",
+                                __FILE__, __LINE__, __func__,
+                                token[0], key, val, ret);
                         if(ret == 0) {
                             if(settings.verbose > 1) {
-                                fprintf(stdout, "%s:%d %s cmd:%s key:%s value:%s ret:%d\n", 
-                                    __FILE__, __LINE__, __func__,
-                                    token[0], key, val, ret);
+                                fprintf(stdout, "%s", r); 
                             }
                         }
                         else {
-                            fprintf(stderr, "%s:%d %s cmd:%s key:%s value:%s ret:%d\n",
-                                    __FILE__, __LINE__, __func__,
-                                    token[0], key, val, ret);
+                            fprintf(stdout, "%s", r); 
                         }
+                        write(c->sfd, r, strlen(r)+1);
                     }
                 } 
                 else {
